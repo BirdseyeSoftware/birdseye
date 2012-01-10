@@ -9,6 +9,10 @@
 ;;   (url-to-node [this url]) ; -> [node-key params-map]
 ;;   (node-to-url [this params-map]))
 
+
+
+
+
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn path-decode
@@ -38,20 +42,8 @@
 (defn- dyn-segment-id [key-segment]
   (keyword (second (decompose-dyn-segment key-segment))))
 
-(defn node-to-url2 [site-map key params-map]
-  (if (contains? #{:home :root} (keyword key))
-    "/"
-    (let [normalized-segs
-          (map (fn [seg]
-                 (if (dynamic? seg)
-                   (let [seg-key (dyn-segment-id seg)]
-                     (if (contains? params-map seg-key)
-                       (params-map seg-key)
-                       (throwf "missing required url parameter: %s" seg-key)))
-                   seg))
-               (split-node-key key))]
-      (str "/" (string/join "/" normalized-segs) "/"))))
 
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn node-to-route-map-entry [k context]
   (let [[static dynamic] (split-with
                           #(not (dynamic? %))
@@ -94,6 +86,20 @@
     (fn matcher [url-path]
       (let [url-routing-key (url-path-to-routing-key url-path token-set)]
         (routing-table url-routing-key)))))
+
+#_(defn node-to-url2 [site-map key params-map]
+  (if (contains? #{:home :root} (keyword key))
+    "/"
+    (let [normalized-segs
+          (map (fn [seg]
+                 (if (dynamic? seg)
+                   (let [seg-key (dyn-segment-id seg)]
+                     (if (contains? params-map seg-key)
+                       (params-map seg-key)
+                       (throwf "missing required url parameter: %s" seg-key)))
+                   seg))
+               (split-node-key key))]
+      (str "/" (string/join "/" normalized-segs) "/"))))
 
 (comment
   ;; just some examples to play with
