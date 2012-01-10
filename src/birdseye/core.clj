@@ -37,13 +37,15 @@
     (if (and parent-key
              (not (site-map parent-key)))
       (throwf
-       "Invalid site-node key '%s'.
- Parent node '%s' does not exist."
+       "Invalid site-node key '%s'. Parent node '%s' does not exist."
        node-key parent-key))))
 
 (defn- validate-site-map-addition [site-map index-in-forms node-key context-map]
   (if (not (keyword? node-key))
-    (throwf "Was expecting a site-map node-key in defsitemap position %s" index-in-forms))
+    (throwf (str "Was expecting a site-map node-key"
+                 " in defsitemap position %s") index-in-forms))
+  (if (= \. (last (name node-key)))
+    (throwf "Node keys must not end in a dot: %s" node-key))
   (if (site-map node-key)
     (throwf "%s is already in the site-map." node-key))
   (assert-parent-node-exists node-key site-map)
@@ -52,7 +54,7 @@
     (throwf "Was expecting a site-map node context map, i.e. a hash-map
           not a %s." (type context-map))))
 
-(defn gen-sitemap [& mapforms]
+(defn gen-sitemap [mapforms]
   (let [n (count mapforms)]
     (loop [i 0
            site-map {}]
@@ -67,17 +69,22 @@
           (recur next-i (assoc site-map node-key context-map)))
         site-map))))
 
-(defn normalize-map-forms [mapforms]
-  ;@@TR: handle the insertion of relative sub-node sequences
-  (for [form mapforms]
-    (cond
-      (named? form)
-      (keyword (name form))
-      :else
-      form)))
+(defn normalize-map-forms [mapforms & prefix]
+  (let [prefix (and prefix (first prefix))
+        normalize-key (fn [k-name]
+                        (if (and prefix (= \. (first k-name)))
+                          (str prefix k-name)
+                          k-name))]
+    (for [form mapforms]
+      (cond
+        (named? form)
+        (keyword (normalize-key (name form)))
+        :else
+        form)))
+  )
 
 (defmacro defsitemap [& mapforms]
-  `(gen-sitemap ~@(normalize-map-forms mapforms)))
+  `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
 
 
 (comment

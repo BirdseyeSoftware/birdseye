@@ -28,6 +28,9 @@
     (every? empty? (dissoc sm :users.$userid))
     (is (= 2 (get-in sm [:users.$userid :2]))))
 
+  (is (thrown-with-msg? Exception #"must not end in a dot"
+        (defsitemap foo.bar.) ))
+
   (is (thrown-with-msg? Exception #"Was expecting"
         (defsitemap {} {}) ))
 
