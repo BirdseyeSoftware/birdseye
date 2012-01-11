@@ -1,6 +1,8 @@
 (ns birdseye.core
+  (:refer-clojure :exclude [sym])
+  (:require [clojure.string :as string])
 
-  (:require [clojure.string :as string]))
+  (:require [clojure.core.match :as match]))
 
 (defn- throwf [msg & args]
   (throw (Exception. (apply format msg args))))
@@ -37,8 +39,9 @@
     (if (and parent-key
              (not (site-map parent-key)))
       (throwf
-       "Invalid site-node key '%s'. Parent node '%s' does not exist."
-       node-key parent-key))))
+       "Invalid site-node key '%s'.
+       Parent node '%s' does not exist. %s"
+       node-key parent-key (keys site-map)))))
 
 (defn- validate-site-map-addition [site-map index-in-forms node-key context-map]
   (if (not (keyword? node-key))
@@ -54,31 +57,65 @@
     (throwf "Was expecting a site-map node context map, i.e. a hash-map
           not a %s." (type context-map))))
 
+(defn any-form-of-nil? [v]
+  (or (nil? v) (#{:nil 'nil} v)))
+
+(defn match-forms [forms]
+  (match/match [forms]
+    [([(nil-as-k :when any-form-of-nil?) & r] :seq)]
+    {:error :nil :message "nil is not a valid node-key"}
+
+    [([(k :when false?) & r] :seq)]
+    {:error :false :message "false is not a valid node-key"}
+
+    [([(k :when keyword?) (next-k :when keyword?) & r] :seq)]
+    {:node-key k}
+
+    [([(k :when keyword?) (children :when vector?) & r] :seq)]
+    {:node-key k :children children}
+
+    [([(k :when keyword?)
+       (context-map :when map?)
+       (children :when vector?) & r] :seq)]
+    {:node-key k :context-map context-map :children children}
+
+    [([(k :when keyword?) (context-map :when map?) & r] :seq)]
+    {:node-key k :context-map context-map}
+
+    [([(k :when keyword?) & r] :seq)]
+    {:node-key k}
+
+    [_]
+    {:error (first forms)}))
+
 (defn gen-sitemap [mapforms]
   (let [n (count mapforms)]
     (loop [i 0
            site-map {}]
       (if (< i n)
-        (let [node-key (nth mapforms i)
-              next-form (if (< (+ 1 i) n)
-                          (nth mapforms (+ 1 i)))
-              context-map-next? (not (keyword? next-form))
-              context-map (or (if context-map-next? next-form) {})
-              next-i (if context-map-next? (+ 2 i) (+ 1 i))]
-          (validate-site-map-addition site-map i node-key context-map)
-          (recur next-i (assoc site-map node-key context-map)))
+        (let [rest-forms (drop i mapforms)
+              match (match-forms rest-forms)]
+          (let [{:keys [node-key children context-map error]
+                 :or {context-map {}}} match]
+            (if error
+              (throwf
+               "Invalid site-map entry at position %s: %s" i (:error match)))
+            (validate-site-map-addition site-map i node-key context-map)
+            (recur (+ i (count match)) (assoc site-map node-key context-map))))
         site-map))))
 
 (defn normalize-map-forms [mapforms & prefix]
   (let [prefix (and prefix (first prefix))
         normalize-key (fn [k-name]
-                        (if (and prefix (= \. (first k-name)))
+                        (if (and prefix
+                                 (= \. (first k-name)))
                           (str prefix k-name)
                           k-name))]
     (for [form mapforms]
       (cond
         (named? form)
         (keyword (normalize-key (name form)))
+        ;; (vector? form) (normalize-map-forms form)
         :else
         form)))
   )
