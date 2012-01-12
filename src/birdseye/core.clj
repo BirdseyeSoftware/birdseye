@@ -4,7 +4,7 @@
 
   (:require [clojure.core.match :as match]))
 
-;;;
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sitemap node-key related funcs and constants
 (defonce node-key-segment-separator \.)
 (defonce node-key-segment-re #"\.")
@@ -32,7 +32,7 @@
 
 
 
-;;;
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sitemap definition related code
 (defn sitemap? [o]
   (and (map? o) (::sitemap (meta o))))
@@ -169,3 +169,34 @@
 
 (defmacro defsitemap [& mapforms]
   `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
+
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; url-mapping
+
+#_(defn gen-routing-table [site-map]
+  ;@@TR: add static mapping with URL strings
+  (into {} (map
+            (fn [[k v]]
+              [(node-key-to-routing-key k) k])
+       site-map)))
+
+#_(defn gen-matcher [site-map & expression-table]
+  (let [routing-table (gen-routing-table site-map)
+        token-set (gen-token-set routing-table)]
+    (fn matcher [url-path]
+      (let [url-routing-key (url-path-to-routing-key url-path token-set)]
+        (routing-table url-routing-key)))))
+
+(defn node-to-url [site-map key params-map]
+  (if (contains? #{:home :root} (keyword key))
+    "/"
+    (let [normalized-segs
+          (map (fn [seg]
+                 (if (dynamic-node-key-seg? seg)
+                   (let [seg-key (dyn-segment-id seg)]
+                     (if (contains? params-map seg-key)
+                       (params-map seg-key)
+                       (throwf "missing required url parameter: %s" seg-key)))
+                   seg))
+               (split-node-key key))]
+      (str "/" (string/join "/" normalized-segs) "/"))))

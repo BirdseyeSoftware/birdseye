@@ -111,3 +111,26 @@
 
   (is (thrown-with-msg? Exception #"Parent node .* does not exist"
         (defsitemap foo.bar))))
+
+(deftest test-node-to-url
+  (let [sm (defsitemap
+             home
+             users
+             users.$userid
+             users.$userid.edit
+             users.$userid.comments
+             users.$userid.comments.$cid
+             )
+        test-url (fn [url k m]
+                   (= url (node-to-url sm k m)))]
+    (is (test-url "/" :home {}))
+    (is (test-url "/users/" :users {}))
+    (is (test-url "/users/123/" :users.$userid
+                  {:userid 123}))
+    (is (test-url "/users/123/edit/"
+                  :users.$userid.edit
+                  {:userid 123}))
+    (is (test-url "/users/123/comments/99/"
+                  :users.$userid.comments.$cid
+                  {:userid 123
+                   :cid 99}))))
