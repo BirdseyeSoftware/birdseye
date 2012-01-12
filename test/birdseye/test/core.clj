@@ -7,10 +7,10 @@
   ([in out] `(assert-form-match ~in ~out nil))
   ([in out msg]
      `(do
-        (is (= (match-forms ~in) ~out) ~msg)
+        (is (= (match-sitemap-forms ~in) ~out) ~msg)
         ;; test with trailing forms
-        (is (= (match-forms (concat ~in [:trash :trash2])) ~out) ~msg)
-        (is (= (match-forms (concat ~in [nil nil nil])) ~out) ~msg))))
+        (is (= (match-sitemap-forms (concat ~in [:trash :trash2])) ~out) ~msg)
+        (is (= (match-sitemap-forms (concat ~in [nil nil nil])) ~out) ~msg))))
 
 (def nil-error-map {:error :nil
                     :message "nil is not a valid node-key"})
@@ -73,6 +73,9 @@
              .users.$userid {:2 (+ 1 1)}
              .users.$userid.edit)
         sm2 (defsitemap toplevel =sm)]
+    (is (relative-sitemap? sm))
+    (is (not (relative-sitemap? sm2)))
+    (is (absolute-sitemap? sm2))
     (assert-basic-sitemap-props sm)
     (assert-basic-sitemap-props sm2)
     (is (= 2 (get-in sm [:.users.$userid :2])))

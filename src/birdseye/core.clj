@@ -30,45 +30,25 @@
 (defn- dyn-segment-id [key-segment]
   (keyword (second (decompose-dyn-segment key-segment))))
 
-(defn- assert-parent-node-exists [node-key sitemap]
-  (let [segments (split-node-key node-key)
-        n-segs (count segments)
-        parent-key (if (and (> n-segs 1)
-                            (not (and (= n-segs 2)
-                                      (= \. (first (name node-key))))))
-                     (join-node-key-segments
-                      (take (- n-segs 1) segments)))]
-    (if (and parent-key
-             (not (sitemap parent-key)))
-      (throwf
-       "Invalid site-node key '%s'.
-       Parent node '%s' does not exist. %s"
-       node-key parent-key (keys sitemap)))))
-
-(defn- validate-sitemap-addition [sitemap index-in-forms node-key context-map]
-  (if (not (keyword? node-key))
-    (throwf (str "Was expecting a sitemap node-key"
-                 " in defsitemap position %s") index-in-forms))
-  (if (= \. (last (name node-key)))
-    (throwf "Node keys must not end in a dot: %s" node-key))
-  (if (sitemap node-key)
-    (throwf "%s is already in the sitemap." node-key))
-  (assert-parent-node-exists node-key sitemap)
-  (if (not (or (map? context-map)
-               (nil? context-map)))
-    (throwf "Was expecting a sitemap node context map, i.e. a hash-map
-          not a %s." (type context-map))))
-
-(defn any-form-of-nil? [v]
+(defn- any-form-of-nil? [v]
   (or (nil? v) (#{:nil 'nil} v)))
 
 (defn sitemap? [o]
   (and (map? o) (::sitemap (meta o))))
 
-(defn node-children? [o]
+(defn relative-node-key? [k]
+  (= \. (first (name k))))
+
+(defn relative-sitemap? [sm]
+  (::relative-sitemap (meta sm)))
+
+(defn absolute-sitemap? [sm]
+  (::absolute-sitemap (meta sm)))
+
+(defn- node-children? [o]
   (or (vector? o) (sitemap? o)))
 
-(defn match-forms [forms]
+(defn match-sitemap-forms [forms]
   (match/match [forms]
     [([(nil-as-k :when any-form-of-nil?) & r] :seq)]
     {:error :nil :message "nil is not a valid node-key"}
@@ -103,6 +83,7 @@
      (flatten (seq children))
      children) parent-key))
 
+
 (defn normalize-map-forms [mapforms & prefix]
   (let [prefix (and prefix (name (first prefix)))
         normalize-key (fn [k-name]
@@ -127,13 +108,43 @@
         :else
         form))))
 
+(defn- assert-parent-node-exists [node-key sitemap]
+  (let [segments (split-node-key node-key)
+        n-segs (count segments)
+        parent-key (if (and (> n-segs 1)
+                            (not (and (= n-segs 2)
+                                      (= \. (first (name node-key))))))
+                     (join-node-key-segments
+                      (take (- n-segs 1) segments)))]
+    (if (and parent-key
+             (not (sitemap parent-key)))
+      (throwf
+       "Invalid site-node key '%s'.
+       Parent node '%s' does not exist. %s"
+       node-key parent-key (keys sitemap)))))
+
+(defn- validate-sitemap-addition [sitemap index-in-forms node-key context-map]
+  (if (not (keyword? node-key))
+    (throwf (str "Was expecting a sitemap node-key"
+                 " in defsitemap position %s") index-in-forms))
+  (if (= \. (last (name node-key)))
+    (throwf "Node keys must not end in a dot: %s" node-key))
+  (if (sitemap node-key)
+    (throwf "%s is already in the sitemap." node-key))
+  (assert-parent-node-exists node-key sitemap)
+  (if (not (or (map? context-map)
+               (nil? context-map)))
+    (throwf "Was expecting a sitemap node context map, i.e. a hash-map
+          not a %s." (type context-map))))
+
 (defn gen-sitemap [mapforms & sitemap0]
   (let [n (count mapforms)]
+
     (loop [i 0
            sitemap (if sitemap0 (first sitemap0) (sorted-map))]
       (if (< i n)
         (let [rest-forms (drop i mapforms)
-              match (match-forms rest-forms)
+              match (match-sitemap-forms rest-forms)
               {:keys [node-key children context-map error]
                :or {context-map {}}} match
               j (+ i (count match))]
@@ -143,12 +154,15 @@
           (validate-sitemap-addition sitemap i node-key context-map)
           (let [sitemap' (assoc sitemap node-key context-map)
                 sitemap' (if children
-                            (gen-sitemap (normalize-node-children
-                                          children node-key)
-                                         sitemap')
-                            sitemap')]
+                           (gen-sitemap (normalize-node-children
+                                         children node-key)
+                                        sitemap')
+                           sitemap')]
             (recur j sitemap')))
-        (with-meta sitemap {::sitemap true})))))
+        (with-meta sitemap
+          {::sitemap true
+           ::absolute-sitemap (not-any? relative-node-key? (keys sitemap))
+           ::relative-sitemap (every? relative-node-key? (keys sitemap))})))))
 
 (defmacro defsitemap [& mapforms]
   `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
