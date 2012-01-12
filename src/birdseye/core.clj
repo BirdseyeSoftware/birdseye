@@ -180,53 +180,21 @@
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; url-mapping
 
-(defn path-decode
-  "Decode a path segment in a URI. Defaults to using UTF-8 encoding."
-  ([path]
-     (path-decode path "UTF-8"))
-  ([path encoding]
-     (string/replace
-      path
-      #"(?:%[0-9A-Fa-f]{2})+"
-      #(URLDecoder/decode % encoding))))
+(defprotocol IUrlMapper
+  (url-to-node [this url]) ; -> [node-key params-map]
+  (node-to-url [this node-key params-map]))
 
-(defn split-url-path [url-path]
-  (string/split (path-decode url-path) "/"))
+(deftype RingApp [sitemap url-generator url-matcher]
+  IUrlMapper
+  (node-to-url [this node-key params-map]
+    (url-generator node-key params-map) )
+
+  (url-to-node [this url] (url-matcher url)))
 
 (defn gen-static-url [node-key]
   (if(contains? #{:home :root} (keyword node-key))
     "/"
     (str "/" (string/join "/" (split-node-key node-key)) "/")))
-
-(defprotocol IUrlMapper
-  (url-to-node [this url]) ; -> [node-key params-map]
-  (node-to-url [this node-key params-map]))
-
-(deftype RingApp [sitemap static-routing-map dynamic-routing-map]
-  IUrlMapper
-  (node-to-url [this key params-map]
-    (if (not (dynamic-node-key? key))
-      (gen-static-url key)
-      (let [normalized-segs
-            (map (fn [seg]
-                   (if (dynamic-node-key-seg? seg)
-                     (let [seg-key (dyn-segment-id seg)]
-                       (if (contains? params-map seg-key)
-                         (params-map seg-key)
-                         (throwf "missing required url parameter: %s" seg-key)))
-                     seg))
-                 (split-node-key key))]
-        (str "/" (string/join "/" normalized-segs) "/"))))
-
-  (url-to-node [this url]               ; -> node-key params
-    (let [static-match (static-routing-map url)]
-      (if static-match
-        [static-match {}]
-        (or (some (fn [[matcher nk]]
-                (if-let [groups (matcher url)]
-                  [nk groups]))
-                  dynamic-routing-map)
-            [nil {}])))))
 
 (defn gen-dynamic-url-matcher [node-key regexes]
   (let [clout-pattern-segs
@@ -242,21 +210,53 @@
     (fn [url-path]
       (clout/route-matches clout-route {:path-info url-path}))))
 
-(defn- gen-routing-maps [sitemap & regexes]
+(defn gen-url-matcher [sitemap & regexes]
   (let [regexes (or regexes {})
-        update-routing-maps
-        (fn [routing-maps [node-key context-map]]
-          (if (dynamic-node-key? node-key)
-            (update-in routing-maps [:dynamic]
-                       #(conj % [(gen-dynamic-url-matcher node-key regexes)
-                                 node-key]))
-            (update-in routing-maps [:static]
-                       #(assoc % (gen-static-url node-key) node-key))))]
-    (reduce update-routing-maps
-            {:static {}
-             :dynamic []}
-            (seq sitemap))))
+        {static-keys false,
+         dynamic-keys true} (group-by dynamic-node-key? (keys sitemap))
+        static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
+        dynamic-routes (map #(vector
+                              (gen-dynamic-url-matcher % regexes)
+                              %)
+                            dynamic-keys)]
+    (fn url-to-node [url]
+      (if-let [node-key (static-map url)]
+        [node-key {}]
+        (or (some (fn [[matcher nk]]
+                    (if-let [groups (matcher url)]
+                      [nk groups]))
+                  dynamic-routes)
+            [nil {}])))))
+
+(defn url-generator [node-key params-map]
+  (if (not (dynamic-node-key? node-key))
+      (gen-static-url node-key)
+      (let [normalized-segs
+            (map (fn [seg]
+                   (if (dynamic-node-key-seg? seg)
+                     (let [seg-key (dyn-segment-id seg)]
+                       (if (contains? params-map seg-key)
+                         (params-map seg-key)
+                         (throwf "missing required url parameter: %s" seg-key)))
+                     seg))
+                 (split-node-key node-key))]
+        (str "/" (string/join "/" normalized-segs) "/"))))
 
 (defn gen-ring-app [sitemap]
-  (let [{:keys [static dynamic]} (gen-routing-maps sitemap)]
-    (RingApp. sitemap static dynamic)))
+  (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
+
+
+(comment
+  (defn path-decode
+  "Decode a path segment in a URI. Defaults to using UTF-8 encoding."
+  ([path]
+     (path-decode path "UTF-8"))
+  ([path encoding]
+     (string/replace
+      path
+      #"(?:%[0-9A-Fa-f]{2})+"
+      #(URLDecoder/decode % encoding))))
+
+  (defn split-url-path [url-path]
+    (string/split (path-decode url-path) "/"))
+  )
