@@ -219,15 +219,17 @@
         static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
         dynamic-routes (map
                         (fn [k] [(gen-dynamic-url-matcher k regexes) k])
-                        dynamic-keys)]
+                        dynamic-keys)
+        match-static #(if-let [k (static-map %)] [k {}])
+        match-dyn (fn [url]
+                    (some (fn [[matcher nk]]
+                            (if-let [groups (matcher url)]
+                              [nk groups]))
+                          dynamic-routes))]
     (fn url-to-node [url]
-      (if-let [node-key (static-map url)]
-        [node-key {}]
-        (or (some (fn [[matcher nk]]
-                    (if-let [groups (matcher url)]
-                      [nk groups]))
-                  dynamic-routes)
-            [nil {}])))))
+      (or (match-static url)
+          (match-dyn url)
+          [nil {}]))))
 
 (defn url-generator [node-key params-map]
   (if (not (dynamic-node-key? node-key))
