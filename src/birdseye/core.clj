@@ -211,14 +211,15 @@
       (clout/route-matches clout-route {:path-info url-path}))))
 
 (defn gen-url-matcher [sitemap & regexes]
-  (let [regexes (or regexes {})
+  (let [regexes (if (map? (first regexes))
+                  (first regexes)
+                  (apply hash-map regexes))
         {static-keys false,
          dynamic-keys true} (group-by dynamic-node-key? (keys sitemap))
         static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
-        dynamic-routes (map #(vector
-                              (gen-dynamic-url-matcher % regexes)
-                              %)
-                            dynamic-keys)]
+        dynamic-routes (map
+                        (fn [k] [(gen-dynamic-url-matcher k regexes) k])
+                        dynamic-keys)]
     (fn url-to-node [url]
       (if-let [node-key (static-map url)]
         [node-key {}]
