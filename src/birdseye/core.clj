@@ -2,16 +2,23 @@
   (:refer-clojure :exclude [sym])
   (:require [clojure.string :as string])
 
-  (:require [clojure.core.match :as match]))
+  (:require [clojure.core.match :as match])
+  (:require [clout.core :as clout])
+
+  (:import java.net.URLDecoder))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sitemap node-key related funcs and constants
 (defonce node-key-segment-separator \.)
 (defonce node-key-segment-re #"\.")
 (defonce node-key-dyn-segment-prefix \$)
+(defonce node-key-dyn-re #"\$")
 
 (defn relative-node-key? [k]
   (= node-key-segment-separator (first (name k))))
+
+(defn- dynamic-node-key? [k]
+  (boolean (re-find node-key-dyn-re (name k))))
 
 (defn- dynamic-node-key-seg? [key-segment]
   (= (first key-segment) node-key-dyn-segment-prefix))
@@ -173,30 +180,83 @@
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; url-mapping
 
-#_(defn gen-routing-table [site-map]
-  ;@@TR: add static mapping with URL strings
-  (into {} (map
-            (fn [[k v]]
-              [(node-key-to-routing-key k) k])
-       site-map)))
+(defn path-decode
+  "Decode a path segment in a URI. Defaults to using UTF-8 encoding."
+  ([path]
+     (path-decode path "UTF-8"))
+  ([path encoding]
+     (string/replace
+      path
+      #"(?:%[0-9A-Fa-f]{2})+"
+      #(URLDecoder/decode % encoding))))
 
-#_(defn gen-matcher [site-map & expression-table]
-  (let [routing-table (gen-routing-table site-map)
-        token-set (gen-token-set routing-table)]
-    (fn matcher [url-path]
-      (let [url-routing-key (url-path-to-routing-key url-path token-set)]
-        (routing-table url-routing-key)))))
+(defn split-url-path [url-path]
+  (string/split (path-decode url-path) "/"))
 
-(defn node-to-url [site-map key params-map]
-  (if (contains? #{:home :root} (keyword key))
+(defn gen-static-url [node-key]
+  (if(contains? #{:home :root} (keyword node-key))
     "/"
-    (let [normalized-segs
-          (map (fn [seg]
-                 (if (dynamic-node-key-seg? seg)
-                   (let [seg-key (dyn-segment-id seg)]
-                     (if (contains? params-map seg-key)
-                       (params-map seg-key)
-                       (throwf "missing required url parameter: %s" seg-key)))
-                   seg))
-               (split-node-key key))]
-      (str "/" (string/join "/" normalized-segs) "/"))))
+    (str "/" (string/join "/" (split-node-key node-key)) "/")))
+
+(defprotocol IUrlMapper
+  (url-to-node [this url]) ; -> [node-key params-map]
+  (node-to-url [this node-key params-map]))
+
+(deftype RingApp [sitemap static-routing-map dynamic-routing-map]
+  IUrlMapper
+  (node-to-url [this key params-map]
+    (if (not (dynamic-node-key? key))
+      (gen-static-url key)
+      (let [normalized-segs
+            (map (fn [seg]
+                   (if (dynamic-node-key-seg? seg)
+                     (let [seg-key (dyn-segment-id seg)]
+                       (if (contains? params-map seg-key)
+                         (params-map seg-key)
+                         (throwf "missing required url parameter: %s" seg-key)))
+                     seg))
+                 (split-node-key key))]
+        (str "/" (string/join "/" normalized-segs) "/"))))
+
+  (url-to-node [this url]               ; -> node-key params
+    (let [static-match (static-routing-map url)]
+      (if static-match
+        [static-match {}]
+        (or (some (fn [[matcher nk]]
+                (if-let [groups (matcher url)]
+                  [nk groups]))
+                  dynamic-routing-map)
+            [nil {}])))))
+
+(defn gen-dynamic-url-matcher [node-key regexes]
+  (let [clout-pattern-segs
+        (map (fn [seg]
+               (if (dynamic-node-key-seg? seg)
+                 (string/replace seg node-key-dyn-re ":")
+                 seg))
+             (split-node-key node-key))
+        clout-pattern (str "/" (string/join "/" clout-pattern-segs) "/")
+        clout-route (clout/route-compile
+                     clout-pattern regexes)]
+    ;; (println clout-pattern clout-route)
+    (fn [url-path]
+      (clout/route-matches clout-route {:path-info url-path}))))
+
+(defn- gen-routing-maps [sitemap & regexes]
+  (let [regexes (or regexes {})
+        update-routing-maps
+        (fn [routing-maps [node-key context-map]]
+          (if (dynamic-node-key? node-key)
+            (update-in routing-maps [:dynamic]
+                       #(conj % [(gen-dynamic-url-matcher node-key regexes)
+                                 node-key]))
+            (update-in routing-maps [:static]
+                       #(assoc % (gen-static-url node-key) node-key))))]
+    (reduce update-routing-maps
+            {:static {}
+             :dynamic []}
+            (seq sitemap))))
+
+(defn gen-ring-app [sitemap]
+  (let [{:keys [static dynamic]} (gen-routing-maps sitemap)]
+    (RingApp. sitemap static dynamic)))
