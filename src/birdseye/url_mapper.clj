@@ -119,3 +119,21 @@
 
       users
       users.$user-id user-nodes)))
+
+#_(defn interactive-test []
+
+  ;; (pp/pprint
+  ;;  (gen-url-matcher site-map))
+  (pp/pprint
+   (let [matcher (gen-matcher site-map)]
+     (matcher "/locations/")))
+
+  ;; (pp/pprint
+  ;;  (let [params {:loc-id 1234
+  ;;                :userid 987
+  ;;                :lang-id "EN"
+  ;;                :var "foo"}]
+  ;;    (for [k (keys site-map)]
+  ;;      [(node-to-url2 site-map k params)
+  ;;       (node-key-to-routing-key k)])))
+  )
