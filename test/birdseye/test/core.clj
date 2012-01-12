@@ -121,8 +121,9 @@
              users.$userid.comments
              users.$userid.comments.$cid
              )
+        ring-app (gen-ring-app sm)
         test-url (fn [url k m]
-                   (= url (node-to-url sm k m)))]
+                   (= url (node-to-url ring-app k m)))]
     (is (test-url "/" :home {}))
     (is (test-url "/users/" :users {}))
     (is (test-url "/users/123/" :users.$userid
@@ -134,3 +135,33 @@
                   :users.$userid.comments.$cid
                   {:userid 123
                    :cid 99}))))
+
+(defmacro assert-url-to-node [ring-app url node-key & params]
+  `(is (= [~node-key ~(apply hash-map params)]
+          (url-to-node ~ring-app ~url))))
+
+(deftest test-url-to-node
+  (let [sm (defsitemap
+             home
+             users
+             users.active
+             users.active.by_join_date
+             users.$userid
+             users.$userid.edit
+             users.$userid.comments
+             users.$userid.comments.$cid
+             )
+        ring-app (gen-ring-app sm)]
+    (assert-url-to-node ring-app "/asdf" nil)
+    (assert-url-to-node ring-app "/" :home)
+    (assert-url-to-node ring-app "/users/" :users)
+    (assert-url-to-node ring-app "/users/active/" :users.active)
+    (assert-url-to-node ring-app "/users/active/by_join_date/"
+                        :users.active.by_join_date)
+    (assert-url-to-node
+     ring-app "/users/1234/" :users.$userid :userid "1234")
+    (assert-url-to-node
+     ring-app "/users/1234/edit/" :users.$userid.edit
+     :userid "1234")
+    )
+  )
