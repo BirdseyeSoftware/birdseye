@@ -76,14 +76,6 @@
     [_]
     {:error (first forms)}))
 
-(defn normalize-node-children [children parent-key]
-  (assert (node-children? children))
-  (normalize-map-forms
-   (if (sitemap? children)
-     (flatten (seq children))
-     children) parent-key))
-
-
 (defn normalize-map-forms [mapforms & prefix]
   (let [prefix (and prefix (name (first prefix)))
         normalize-key (fn [k-name]
@@ -107,6 +99,13 @@
 
         :else
         form))))
+
+(defn normalize-node-children [children parent-key]
+  (assert (node-children? children))
+  (normalize-map-forms
+   (if (sitemap? children)
+     (flatten (seq children))
+     children) parent-key))
 
 (defn- assert-parent-node-exists [node-key sitemap]
   (let [segments (split-node-key node-key)
