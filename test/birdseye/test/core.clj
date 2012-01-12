@@ -87,7 +87,7 @@
   (let [node-key :just-testing
         node-key2 :just-testing.foo
         context-map {:a 1}
-        sm (defsitemap =node-key =node-key2 =context-map)]
+        sm (defsitemap =node-key {} =node-key2 =context-map)]
     (assert-basic-sitemap-props sm)
     (is (= sm {:just-testing {}
                :just-testing.foo context-map}))))
