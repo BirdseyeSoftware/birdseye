@@ -3,6 +3,13 @@
   (:use [birdseye.core])
   (:use [clojure.test]))
 
+(def nil-error-map {:error :nil
+                    :message "nil is not a valid node-key"})
+
+(def match-sitemap-forms
+  ;; is private
+  (ns-resolve 'birdseye.core 'match-sitemap-forms))
+
 (defmacro assert-form-match
   ([in out] `(assert-form-match ~in ~out nil))
   ([in out msg]
@@ -11,9 +18,6 @@
         ;; test with trailing forms
         (is (= (match-sitemap-forms (concat ~in [:trash :trash2])) ~out) ~msg)
         (is (= (match-sitemap-forms (concat ~in [nil nil nil])) ~out) ~msg))))
-
-(def nil-error-map {:error :nil
-                    :message "nil is not a valid node-key"})
 
 (deftest test-form-matching
   (assert-form-match [:foo] {:node-key :foo})

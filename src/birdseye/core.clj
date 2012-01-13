@@ -3,9 +3,7 @@
   (:require [clojure.string :as string])
 
   (:require [clojure.core.match :as match])
-  (:require [clout.core :as clout])
-
-  (:import java.net.URLDecoder))
+  (:require [clout.core :as clout]))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sitemap node-key related funcs and constants
@@ -14,7 +12,7 @@
 (defonce node-key-dyn-segment-prefix \$)
 (defonce node-key-dyn-re #"\$")
 
-(defn relative-node-key? [k]
+(defn- relative-node-key? [k]
   (= node-key-segment-separator (first (name k))))
 
 (defn- dynamic-node-key? [k]
@@ -23,10 +21,10 @@
 (defn- dynamic-node-key-seg? [key-segment]
   (= (first key-segment) node-key-dyn-segment-prefix))
 
-(defn split-node-key [k]
+(defn- split-node-key [k]
   (string/split (name k) node-key-segment-re))
 
-(defn join-node-key-segments [segments]
+(defn- join-node-key-segments [segments]
   (keyword (string/join node-key-segment-separator segments)))
 
 (defn- decompose-dyn-segment [key-segment]
@@ -52,7 +50,7 @@
 (defn- node-children? [o]
   (or (vector? o) (sitemap? o)))
 
-(defn match-sitemap-forms [forms]
+(defn- match-sitemap-forms [forms]
   (let [any-form-of-nil? (fn [v]
                            (or (nil? v) (#{:nil 'nil} v)))]
     (match/match [forms]
@@ -177,61 +175,13 @@
   `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; url-mapping
+;;; url generation from node-keys
 
-(defprotocol IUrlMapper
-  (url-to-node [this url]) ; -> [node-key params-map]
-  (node-to-url [this node-key params-map]))
-
-(deftype RingApp [sitemap url-generator url-matcher]
-  IUrlMapper
-  (node-to-url [this node-key params-map]
-    (url-generator node-key params-map) )
-
-  (url-to-node [this url] (url-matcher url)))
-
-(defn gen-static-url [node-key]
+(defn- gen-static-url [node-key]
   (if (not (dynamic-node-key? node-key))
     (if(contains? #{:home :root} (keyword node-key))
       "/"
       (str "/" (string/join "/" (split-node-key node-key)) "/"))))
-
-(defn gen-dynamic-url-matcher [node-key regexes]
-  (let [clout-pattern-segs
-        (map (fn [seg]
-               (if (dynamic-node-key-seg? seg)
-                 (string/replace seg node-key-dyn-re ":")
-                 seg))
-             (split-node-key node-key))
-        clout-pattern (str "/" (string/join "/" clout-pattern-segs) "/")
-        clout-route (clout/route-compile
-                     clout-pattern regexes)]
-    (fn [url-path]
-      (clout/route-matches clout-route {:path-info url-path}))))
-
-(defn gen-url-matcher [sitemap & regexes]
-  (let [regexes (if (map? (first regexes))
-                  (first regexes)
-                  (apply hash-map regexes))
-        {static-keys false,
-         dynamic-keys true} (group-by dynamic-node-key? (keys sitemap))
-        static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
-        dynamic-routes (map
-                        (fn [k] [(gen-dynamic-url-matcher k regexes) k])
-                        dynamic-keys)
-        match-static #(if-let [k (static-map %)] [k {}])
-        match-dyn (fn [url]
-                    ;; TODO
-                    ;; this could be optimized with static lookup of
-                    ;; any leading static segments
-                    (some (fn [[matcher nk]]
-                            (if-let [groups (matcher url)]
-                              [nk groups]))
-                          dynamic-routes))]
-    (fn url-to-node [url]
-      (or (match-static url)
-          (match-dyn url)
-          [nil {}]))))
 
 (defn- gen-dynamic-url [node-key params-map]
   ;; TODO
@@ -247,9 +197,63 @@
           (throwf "missing required url parameter: %s" param-id))
         seg)))))
 
-(defn url-generator [node-key params-map]
+(defn- url-generator [node-key params-map]
   (or (gen-static-url node-key)
       (gen-dynamic-url node-key params-map)))
+
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; url-matching
+
+(defn- gen-dynamic-url-matcher [node-key regexes]
+  (let [clout-pattern-segs
+        (map (fn [seg]
+               (if (dynamic-node-key-seg? seg)
+                 (string/replace seg node-key-dyn-re ":")
+                 seg))
+             (split-node-key node-key))
+        clout-pattern (str "/" (string/join "/" clout-pattern-segs) "/")
+        clout-route (clout/route-compile
+                     clout-pattern regexes)]
+    (fn [url-path]
+      (clout/route-matches clout-route {:path-info url-path}))))
+
+(defn- gen-url-matcher [sitemap & regexes]
+  (let [regexes (if (map? (first regexes))
+                  (first regexes)
+                  (apply hash-map regexes))
+        {static-keys false,
+         dynamic-keys true} (group-by dynamic-node-key? (keys sitemap))
+        static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
+        dynamic-matchers (map
+                        (fn [k] [(gen-dynamic-url-matcher k regexes) k])
+                        dynamic-keys)
+        match-static #(if-let [k (static-map %)] [k {}])
+        match-dyn (fn [url]
+                    ;; TODO
+                    ;; this could be optimized with static lookup of
+                    ;; any leading static segments
+                    (some (fn [[matcher nk]]
+                            (if-let [groups (matcher url)]
+                              [nk groups]))
+                          dynamic-matchers))]
+    (fn url-to-node [url]
+      (or (match-static url)
+          (match-dyn url)
+          [nil {}]))))
+
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; tie it all together
+
+(defprotocol IUrlMapper
+  (url-to-node [this url]) ; -> [node-key params-map]
+  (node-to-url [this node-key params-map]))
+
+(deftype RingApp [sitemap url-generator url-matcher]
+  IUrlMapper
+  (node-to-url [this node-key params-map]
+    (url-generator node-key params-map) )
+
+  (url-to-node [this url] (url-matcher url)))
 
 (defn gen-ring-app [sitemap]
   (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
