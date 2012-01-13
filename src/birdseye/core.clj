@@ -225,8 +225,12 @@
          dynamic-keys true} (group-by dynamic-node-key? (keys sitemap))
         static-map (into {} (for [k static-keys] [(gen-static-url k) k]))
         dynamic-matchers (map
-                        (fn [k] [(gen-dynamic-url-matcher k regexes) k])
-                        dynamic-keys)
+                          (fn [k]
+                            [(gen-dynamic-url-matcher
+                              k (merge regexes
+                                       (get-in sitemap [k :regexes])))
+                             k])
+                          dynamic-keys)
         match-static #(if-let [k (static-map %)] [k {}])
         match-dyn (fn [url]
                     ;; TODO
@@ -245,15 +249,74 @@
 ;;; tie it all together
 
 (defprotocol IUrlMapper
-  (url-to-node [this url]) ; -> [node-key params-map]
+  (url-to-node [this url-path]) ; -> [node-key params-map]
   (node-to-url [this node-key params-map]))
+
+(defprotocol INodeContext
+  (gen-url [this params])
+  (get-breadcrumb [this params])
+  (get-handler [this req])
+  (get-view [this req resp]))
+
+(deftype NodeContext [node-key context-map ring-app]
+  INodeContext
+  (gen-url [this params]
+    (node-to-url ring-app node-key params))
+  (get-breadcrumb [this params]
+    (or (context-map :breadcrumb)
+        (str node-key)))
+
+  (get-handler [this req] nil)
+  (get-view [this req resp] (fn [req resp] resp)))
+
+(defprotocol IRingApp
+  (handle-request [this req])
+
+  (get-default-handler [this node-key req])
+  (get-node-key-from-ring-req [this req])
+  (get-node-ctx [this node-key]))
 
 (deftype RingApp [sitemap url-generator url-matcher]
   IUrlMapper
   (node-to-url [this node-key params-map]
-    (url-generator node-key params-map) )
+    (url-generator node-key params-map))
+  (url-to-node [this url-path] (url-matcher url-path))
 
-  (url-to-node [this url] (url-matcher url)))
+  IRingApp
+  (get-node-ctx [this node-key]
+    (NodeContext. node-key (sitemap node-key) this))
+
+  (handle-request
+    [this req]
+    (if-let [node-key (get-node-key-from-ring-req this req)]
+      (let [node-ctx          (get-node-ctx this node-key)
+            ;;req               (augment-ring-request node-ctx req)
+            handler           (or
+                               (get-handler node-ctx req)
+                               (get-default-handler this node-key req))
+            initial-resp      (handler req)
+            view              (get-view node-ctx req initial-resp)
+            final-resp        (view req initial-resp)]
+        final-resp)
+      (do
+        {:status 404
+         :headers {"Content/Type" "text/html"}
+         :body "Not Found"})))
+
+  (get-default-handler [this node-key req]
+    (fn [req]
+      {:status 200
+       :headers {"Content/Type" "text/html"}
+       :body (str "default handler for " (name node-key))}))
+
+  (get-node-key-from-ring-req [this req]
+    (url-to-node this (:path-info req)))
+
+  ;; (get-handler-for-req [this req]
+  ;;   (let [node-key (get-node-key-from-ring-req this req)]
+  ;;     (get-handler (get-node-ctx this node-key) req)))
+
+  )
 
 (defn gen-ring-app [sitemap]
   (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
