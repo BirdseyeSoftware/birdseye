@@ -259,6 +259,7 @@
   (get-view [this req resp]))
 
 (deftype NodeContext [node-key context-map ring-app]
+
   INodeContext
   (gen-url [this params]
     (node-to-url ring-app node-key params))
@@ -269,7 +270,18 @@
         crumb)
       (str node-key)))
 
-  (get-handler [this req] (context-map :h))
+  (get-handler [this req]
+    ;; TODO add support for contextual middleware on sub-sections of the
+    ;; sitemap
+    (or
+     (context-map :h)
+     ;; or lookup inherited default handler from parent node context
+     (::default-handler (.sitemap ring-app))
+     (fn [req]
+       {:status 200
+        :headers {"Content/Type" "text/html"}
+        :body (str "default handler for " (name node-key))})))
+
   (get-view [this req resp]
     (or (context-map :v)
         (constantly resp))))
@@ -277,7 +289,6 @@
 (defprotocol IRingApp
   (get-node-ctx [this node-key])
   (handle-request [this req])
-  (get-default-handler [this node-key req])
   (handle-404 [this req]))
 
 (deftype RingApp [sitemap url-generator url-matcher]
@@ -297,9 +308,7 @@
       (if node-key
         (let [node-ctx          (get-node-ctx this node-key)
               ;;req               (augment-ring-request node-ctx req)
-              handler           (or
-                                 (get-handler node-ctx req)
-                                 (get-default-handler this node-key req))
+              handler           (get-handler node-ctx req)
               initial-resp      (handler req)
               view              (get-view node-ctx req initial-resp)
               final-resp        (view req initial-resp)]
@@ -308,17 +317,12 @@
 
   (handle-404 [this req]
     ;; TODO implement 404 lookup mechanism that walks up the tree
+    ;; from the closest node match
     ((or (sitemap :404)
          (constantly
           {:status 404
            :headers {"Content/Type" "text/html"}
-           :body "Not Found"}))  req))
-
-  (get-default-handler [this node-key req]
-    (fn [req]
-      {:status 200
-       :headers {"Content/Type" "text/html"}
-       :body (str "default handler for " (name node-key))})))
+           :body "Not Found"}))  req)))
 
 (defn gen-ring-app [sitemap]
   (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
