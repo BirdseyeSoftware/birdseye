@@ -35,9 +35,8 @@
     [prefix id]))
 
 (defn- dyn-segment-id [key-segment]
-  (keyword (second (decompose-dyn-segment key-segment))))
-
-
+  (if (dynamic-node-key-seg? key-segment)
+    (keyword (second (decompose-dyn-segment key-segment)))))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; sitemap definition related code
@@ -192,9 +191,10 @@
   (url-to-node [this url] (url-matcher url)))
 
 (defn gen-static-url [node-key]
-  (if(contains? #{:home :root} (keyword node-key))
-    "/"
-    (str "/" (string/join "/" (split-node-key node-key)) "/")))
+  (if (not (dynamic-node-key? node-key))
+    (if(contains? #{:home :root} (keyword node-key))
+      "/"
+      (str "/" (string/join "/" (split-node-key node-key)) "/"))))
 
 (defn gen-dynamic-url-matcher [node-key regexes]
   (let [clout-pattern-segs
@@ -206,7 +206,6 @@
         clout-pattern (str "/" (string/join "/" clout-pattern-segs) "/")
         clout-route (clout/route-compile
                      clout-pattern regexes)]
-    ;; (println clout-pattern clout-route)
     (fn [url-path]
       (clout/route-matches clout-route {:path-info url-path}))))
 
@@ -222,6 +221,9 @@
                         dynamic-keys)
         match-static #(if-let [k (static-map %)] [k {}])
         match-dyn (fn [url]
+                    ;; TODO
+                    ;; this could be optimized with static lookup of
+                    ;; any leading static segments
                     (some (fn [[matcher nk]]
                             (if-let [groups (matcher url)]
                               [nk groups]))
@@ -231,35 +233,23 @@
           (match-dyn url)
           [nil {}]))))
 
+(defn- gen-dynamic-url [node-key params-map]
+  ;; TODO
+  ;; need to check on param url-escaping here
+  (format
+   "/%s/"
+   (string/join
+    "/"
+    (for [seg (split-node-key node-key)]
+      (if-let [param-id (dyn-segment-id seg)]
+        (if (contains? params-map param-id)
+          (params-map param-id)
+          (throwf "missing required url parameter: %s" param-id))
+        seg)))))
+
 (defn url-generator [node-key params-map]
-  (if (not (dynamic-node-key? node-key))
-      (gen-static-url node-key)
-      (let [normalized-segs
-            (map (fn [seg]
-                   (if (dynamic-node-key-seg? seg)
-                     (let [seg-key (dyn-segment-id seg)]
-                       (if (contains? params-map seg-key)
-                         (params-map seg-key)
-                         (throwf "missing required url parameter: %s" seg-key)))
-                     seg))
-                 (split-node-key node-key))]
-        (str "/" (string/join "/" normalized-segs) "/"))))
+  (or (gen-static-url node-key)
+      (gen-dynamic-url node-key params-map)))
 
 (defn gen-ring-app [sitemap]
   (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
-
-
-(comment
-  (defn path-decode
-  "Decode a path segment in a URI. Defaults to using UTF-8 encoding."
-  ([path]
-     (path-decode path "UTF-8"))
-  ([path encoding]
-     (string/replace
-      path
-      #"(?:%[0-9A-Fa-f]{2})+"
-      #(URLDecoder/decode % encoding))))
-
-  (defn split-url-path [url-path]
-    (string/split (path-decode url-path) "/"))
-  )
