@@ -263,18 +263,22 @@
   (gen-url [this params]
     (node-to-url ring-app node-key params))
   (get-breadcrumb [this params]
-    (or (context-map :breadcrumb)
-        (str node-key)))
+    (if-let [crumb (context-map :breadcrumb)]
+      (if (fn? crumb)
+        (crumb params)
+        crumb)
+      (str node-key)))
 
-  (get-handler [this req] nil)
-  (get-view [this req resp] (fn [req resp] resp)))
+  (get-handler [this req] (context-map :h))
+  (get-view [this req resp]
+    (or (context-map :v)
+        (constantly resp))))
 
 (defprotocol IRingApp
+  (get-node-ctx [this node-key])
   (handle-request [this req])
-
   (get-default-handler [this node-key req])
-  (get-node-key-from-ring-req [this req])
-  (get-node-ctx [this node-key]))
+  (handle-404 [this req]))
 
 (deftype RingApp [sitemap url-generator url-matcher]
   IUrlMapper
@@ -284,39 +288,37 @@
 
   IRingApp
   (get-node-ctx [this node-key]
+    ;; cache these
     (NodeContext. node-key (sitemap node-key) this))
 
   (handle-request
     [this req]
-    (if-let [node-key (get-node-key-from-ring-req this req)]
-      (let [node-ctx          (get-node-ctx this node-key)
-            ;;req               (augment-ring-request node-ctx req)
-            handler           (or
-                               (get-handler node-ctx req)
-                               (get-default-handler this node-key req))
-            initial-resp      (handler req)
-            view              (get-view node-ctx req initial-resp)
-            final-resp        (view req initial-resp)]
-        final-resp)
-      (do
-        {:status 404
-         :headers {"Content/Type" "text/html"}
-         :body "Not Found"})))
+    (let [[node-key params] (url-to-node this (:path-info req))]
+      (if node-key
+        (let [node-ctx          (get-node-ctx this node-key)
+              ;;req               (augment-ring-request node-ctx req)
+              handler           (or
+                                 (get-handler node-ctx req)
+                                 (get-default-handler this node-key req))
+              initial-resp      (handler req)
+              view              (get-view node-ctx req initial-resp)
+              final-resp        (view req initial-resp)]
+          final-resp)
+        (handle-404 this req))))
+
+  (handle-404 [this req]
+    ;; TODO implement 404 lookup mechanism that walks up the tree
+    ((or (sitemap :404)
+         (constantly
+          {:status 404
+           :headers {"Content/Type" "text/html"}
+           :body "Not Found"}))  req))
 
   (get-default-handler [this node-key req]
     (fn [req]
       {:status 200
        :headers {"Content/Type" "text/html"}
-       :body (str "default handler for " (name node-key))}))
-
-  (get-node-key-from-ring-req [this req]
-    (url-to-node this (:path-info req)))
-
-  ;; (get-handler-for-req [this req]
-  ;;   (let [node-key (get-node-key-from-ring-req this req)]
-  ;;     (get-handler (get-node-ctx this node-key) req)))
-
-  )
+       :body (str "default handler for " (name node-key))})))
 
 (defn gen-ring-app [sitemap]
   (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
