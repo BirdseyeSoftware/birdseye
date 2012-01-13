@@ -1,4 +1,4 @@
-(ns birdseye.url-mapper
+(ns birdseye.tmp-notes
   (:require [clojure.string :as string])
   (:import java.net.URLDecoder))
 
