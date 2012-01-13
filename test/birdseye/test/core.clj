@@ -169,3 +169,38 @@
      :userid "1234")
     )
   )
+(deftest test-ring-routing
+
+  (let [response-404 {:status 404
+                      :headers {"Content/Type" "text/html"}
+                      :body "Not Found"}
+        sm (defsitemap
+             home
+             users
+             users.$userid {:h (fn [req]
+                                 {:status 200
+                                  :headers {"Content/Type" "text/txt"}
+                                  :body "Hi!"})
+                            :v (fn [req resp] (assoc resp :body "HIII"))}
+             users.$userid.edit
+             users.$userid.comments {:breadcrumb "comments"}
+             users.$userid.comments.$cid
+             )
+        ring-app (gen-ring-app sm)
+        h #(handle-request ring-app {:path-info %})
+        gen-resp #(merge {:status 200
+                          :headers {"Content/Type" "text/html"}}
+                         %)]
+    (is (= (h "/nonexistent") response-404))
+    (is (= (h "/users/1234//") response-404))
+    (is (= (h "/users/1234/")
+           (gen-resp {:headers {"Content/Type" "text/txt"}
+                      :body "HIII"})))
+    (is (= (h "/users/1234/edit/")
+           (gen-resp {:body "default handler for users.$userid.edit"})))
+    (is (= (h "/users/1234/comments/")
+           (gen-resp {:body "default handler for users.$userid.comments"})))
+    (is (= (get-breadcrumb (get-node-ctx ring-app
+                                         :users.$userid.comments)
+                           {:userid 1234})
+           "comments"))))
