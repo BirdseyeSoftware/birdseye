@@ -187,18 +187,18 @@
              users.$userid.comments.$cid
              )
         ring-app (gen-ring-app sm)
-        h #(handle-request ring-app {:path-info %})
+        handler #(ring-app {:path-info %})
         gen-resp #(merge {:status 200
                           :headers {"Content/Type" "text/html"}}
                          %)]
-    (is (= (h "/nonexistent") response-404))
-    (is (= (h "/users/1234//") response-404))
-    (is (= (h "/users/1234/")
+    (is (= (handler "/nonexistent") response-404))
+    (is (= (handler "/users/1234//") response-404))
+    (is (= (handler "/users/1234/")
            (gen-resp {:headers {"Content/Type" "text/txt"}
                       :body "HIII"})))
-    (is (= (h "/users/1234/edit/")
+    (is (= (handler "/users/1234/edit/")
            (gen-resp {:body "default handler for users.$userid.edit"})))
-    (is (= (h "/users/1234/comments/")
+    (is (= (handler "/users/1234/comments/")
            (gen-resp {:body "default handler for users.$userid.comments"})))
     (is (= (get-breadcrumb (get-node-ctx ring-app
                                          :users.$userid.comments)

@@ -1,6 +1,7 @@
 (ns birdseye.core
   (:refer-clojure :exclude [sym])
   (:require [clojure.string :as string])
+  (:import [clojure.lang IFn ILookup])
 
   (:require [clojure.core.match :as match])
   (:require [clout.core :as clout]))
@@ -292,6 +293,11 @@
   (handle-404 [this req]))
 
 (deftype RingApp [sitemap url-generator url-matcher]
+  ;; IFn support in order to provide: (ring-app req)
+  IFn
+  (invoke [this req] (handle-request this req))
+  (applyTo [this args] (clojure.lang.AFn/applyToHelper this args))
+
   IUrlMapper
   (node-to-url [this node-key params-map]
     (url-generator node-key params-map))
