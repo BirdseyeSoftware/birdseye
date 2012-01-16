@@ -6,8 +6,12 @@
   (:require [clojure.core.match :as match])
   (:require [clout.core :as clout]))
 
-;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; sitemap node-key related funcs and constants
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; sitemap node-key related funcs and constants
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defonce node-key-segment-separator \.)
 (defonce node-key-segment-re #"\.")
 (defonce node-key-dyn-segment-prefix \$)
@@ -37,10 +41,14 @@
   (if (dynamic-node-key-seg? key-segment)
     (keyword (second (decompose-dyn-segment key-segment)))))
 
-;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; sitemap definition related code
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; sitemap definition related code
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn sitemap? [o]
-  (and (map? o) (::sitemap (meta o))))
+  (boolean (and (map? o) (::sitemap (meta o)))))
 
 (defn relative-sitemap? [sm]
   (every? relative-node-key? (keys sm)))
@@ -175,8 +183,11 @@
 (defmacro defsitemap [& mapforms]
   `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
 
-;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; url generation from node-keys
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; url generation from node-keys
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- gen-static-url [node-key]
   (if (not (dynamic-node-key? node-key))
@@ -202,8 +213,11 @@
   (or (gen-static-url node-key)
       (gen-dynamic-url node-key params-map)))
 
-;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; url-matching
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; url-matching
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- gen-dynamic-url-matcher [node-key regexes]
   (let [clout-pattern-segs
@@ -246,8 +260,11 @@
           (match-dyn url)
           [nil {}]))))
 
-;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; tie it all together
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; tie it all together
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defprotocol IUrlMapper
   (url-to-node [this url-path]) ; -> [node-key params-map]
