@@ -7,10 +7,7 @@
   (:require [clout.core :as clout]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; sitemap node-key related funcs and constants
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defonce node-key-segment-separator \.)
 (defonce node-key-segment-re #"\.")
@@ -42,10 +39,7 @@
     (keyword (second (decompose-dyn-segment key-segment)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; sitemap definition related code
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn sitemap? [o]
   (boolean (and (map? o) (::sitemap (meta o)))))
@@ -184,10 +178,7 @@
   `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; url generation from node-keys
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- gen-static-url [node-key]
   (if (not (dynamic-node-key? node-key))
@@ -214,10 +205,7 @@
       (gen-dynamic-url node-key params-map)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; url-matching
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- gen-dynamic-url-matcher [node-key regexes]
   (let [clout-pattern-segs
@@ -261,10 +249,7 @@
           [nil {}]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;; tie it all together
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defprotocol IUrlMapper
   (url-to-node [this url-path]) ; -> [node-key params-map]
