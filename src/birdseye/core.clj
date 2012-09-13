@@ -54,10 +54,11 @@
   (or (vector? o) (sitemap? o)))
 
 (defn- match-sitemap-forms [forms]
-  (let [any-form-of-nil? (fn [v]
-                           (or (nil? v) (#{:nil 'nil} v)))]
+  (let [nil-value? (fn [v]
+                     (or (nil? v)
+                         (#{:nil 'nil} v)))]
     (match/match [forms]
-      [([(nil-as-k :when any-form-of-nil?) & r] :seq)]
+      [([(k :when nil-value?) & r] :seq)]
       {:error :nil :message "nil is not a valid node-key"}
 
       [([(k :when false?) & r] :seq)]
@@ -148,12 +149,14 @@
           not a %s." (type context-map))))
 
 (defn gen-sitemap [mapforms & sitemap0]
-  (let [n (count mapforms)]
+  (let [mapforms (normalize-map-forms mapforms)
+        n (count mapforms)]
     (loop [i 0
            sitemap (if sitemap0
                      (first sitemap0) (sorted-map))]
       (if (< i n)
         (let [rest-forms (drop i mapforms)
+
               match (match-sitemap-forms rest-forms)
               {:keys [node-key children context-map error]
                :or {context-map {}}} match
@@ -261,7 +264,7 @@
   (get-handler [this req])
   (get-view [this req resp]))
 
-(deftype NodeContext [node-key context-map ring-app]
+(defrecord NodeContext [node-key context-map ring-app]
 
   INodeContext
   (gen-url [this params]
@@ -279,7 +282,7 @@
     (or
      (context-map :h)
      ;; or lookup inherited default handler from parent node context
-     (::default-handler (.sitemap ring-app))
+     (:birdseye/default-handler (.sitemap ring-app))
      (fn [req]
        {:status 200
         :headers {"Content/Type" "text/html"}
@@ -288,6 +291,9 @@
   (get-view [this req resp]
     (or (context-map :v)
         (constantly resp))))
+
+(defn set-default-handler [sitemap h]
+  (assoc sitemap :birdseye/default-handler h))
 
 (defprotocol IRingApp
   (get-node-ctx [this node-key])
@@ -318,7 +324,8 @@
 
   (handle-request
     [this req]
-    (let [[node-key params] (url-to-node this (:path-info req))]
+    (let [[node-key params] (url-to-node this (or (:path-info req)
+                                                  (:url req)))]
       (if node-key
         (let [node-ctx          (get-node-ctx this node-key)
               req               (-augment-ring-request this node-ctx req)
