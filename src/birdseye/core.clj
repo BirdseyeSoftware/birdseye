@@ -306,6 +306,7 @@
 
 (defprotocol IRingApp
   (get-node-ctx [this node-key])
+  (-augment-ring-request [this node-ctx key])
   (handle-request [this req])
   (handle-404 [this req]))
 
@@ -325,12 +326,17 @@
     ;; cache these
     (NodeContext. node-key (sitemap node-key) this))
 
+  (-augment-ring-request [this node-ctx req]
+    (assoc req :birdseye/node-key (.node-key node-ctx)
+               :birdseye/sitemap sitemap
+               :birdseye/node-ctx node-ctx))
+
   (handle-request
     [this req]
     (let [[node-key params] (url-to-node this (:path-info req))]
       (if node-key
         (let [node-ctx          (get-node-ctx this node-key)
-              ;;req               (augment-ring-request node-ctx req)
+              req               (-augment-ring-request this node-ctx req)
               handler           (get-handler node-ctx req)
               initial-resp      (handler req)
               view              (get-view node-ctx req initial-resp)
