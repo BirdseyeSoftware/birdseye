@@ -58,27 +58,27 @@
                      (or (nil? v)
                          (#{:nil 'nil} v)))]
     (match/match [forms]
-      [([(k :when nil-value?) & r] :seq)]
+      [([(k :guard nil-value?) & r] :seq)]
       {:error :nil :message "nil is not a valid node-key"}
 
-      [([(k :when false?) & r] :seq)]
+      [([(k :guard false?) & r] :seq)]
       {:error :false :message "false is not a valid node-key"}
 
-      [([(k :when keyword?) (next-k :when keyword?) & r] :seq)]
+      [([(k :guard keyword?) (next-k :guard keyword?) & r] :seq)]
       {:node-key k}
 
-      [([(k :when keyword?) (children :when node-children?) & r] :seq)]
+      [([(k :guard keyword?) (children :guard node-children?) & r] :seq)]
       {:node-key k :children children}
 
-      [([(k :when keyword?)
-         (context-map :when map?)
-         (children :when node-children?) & r] :seq)]
+      [([(k :guard keyword?)
+         (context-map :guard map?)
+         (children :guard node-children?) & r] :seq)]
       {:node-key k :context-map context-map :children children}
 
-      [([(k :when keyword?) (context-map :when map?) & r] :seq)]
+      [([(k :guard keyword?) (context-map :guard map?) & r] :seq)]
       {:node-key k :context-map context-map}
 
-      [([(k :when keyword?) & r] :seq)]
+      [([(k :guard keyword?) & r] :seq)]
       {:node-key k}
 
       [_]
