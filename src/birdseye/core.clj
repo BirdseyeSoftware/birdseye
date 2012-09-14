@@ -325,7 +325,7 @@
   (handle-request
     [this req]
     (let [[node-key params] (url-to-node this (or (:path-info req)
-                                                  (:url req)))]
+                                                  (:uri req)))]
       (if node-key
         (let [node-ctx          (get-node-ctx this node-key)
               req               (-augment-ring-request this node-ctx req)
