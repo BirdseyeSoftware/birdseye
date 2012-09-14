@@ -297,7 +297,7 @@
 
 (defprotocol IRingApp
   (get-node-ctx [this node-key])
-  (-augment-ring-request [this node-ctx key])
+  (-augment-ring-request [this node-ctx req])
   (handle-request [this req])
   (handle-404 [this req]))
 
