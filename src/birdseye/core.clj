@@ -315,12 +315,14 @@
   IRingApp
   (get-node-ctx [this node-key]
     ;; cache these
-    (NodeContext. node-key (sitemap node-key) this))
+    (map->NodeContext {:node-key node-key
+                       :context-map (sitemap node-key)
+                       :ring-app this}))
 
   (-augment-ring-request [this node-ctx req]
     (assoc req :birdseye/node-key (.node-key node-ctx)
-               :birdseye/sitemap sitemap
-               :birdseye/node-ctx node-ctx))
+           :birdseye/sitemap sitemap
+           :birdseye/node-ctx node-ctx))
 
   (handle-request
     [this req]
