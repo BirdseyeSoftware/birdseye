@@ -92,22 +92,23 @@
                           (str prefix k-name)
                           k-name))
         named? (fn  [x] (instance? clojure.lang.Named x))]
-    (for [form mapforms]
-      (cond
-        ;; match any symbols that should be inserted by value rather
-        ;; by than name
-        (and (named? form)
-             (re-find #"=" (name form)))
-        (symbol (apply str (rest (name form))))
+    (into []
+          (for [form mapforms]
+            (cond
+              ;; match any symbols that should be inserted by value rather
+              ;; by than name
+              (and (named? form)
+                   (re-find #"=" (name form)))
+              (symbol (apply str (rest (name form))))
 
-        (and (named? form)
-             (not (re-find #"/" (name form))))
-        (keyword (normalize-key (name form)))
+              (and (named? form)
+                   (not (re-find #"/" (name form))))
+              (keyword (normalize-key (name form)))
 
-        (vector? form) (apply vector (normalize-map-forms form))
+              (vector? form) (apply vector (normalize-map-forms form))
 
-        :else
-        form))))
+              :else
+              form)))))
 
 (defn- normalize-node-children [children parent-key]
   (assert (node-children? children))
@@ -148,12 +149,11 @@
     (throwf "Was expecting a sitemap node context map, i.e. a hash-map
           not a %s." (type context-map))))
 
-(defn gen-sitemap [mapforms & sitemap0]
+(defn -gen-sitemap [mapforms & [sitemap0]]
   (let [mapforms (normalize-map-forms mapforms)
         n (count mapforms)]
     (loop [i 0
-           sitemap (if sitemap0
-                     (first sitemap0) (sorted-map))]
+           sitemap (if sitemap0 sitemap0 (sorted-map))]
       (if (< i n)
         (let [rest-forms (drop i mapforms)
 
@@ -167,7 +167,7 @@
           (validate-sitemap-addition sitemap i node-key context-map)
           (let [sitemap' (assoc sitemap node-key context-map)
                 sitemap' (if children
-                           (gen-sitemap (normalize-node-children
+                           (-gen-sitemap (normalize-node-children
                                          children node-key)
                                         sitemap')
                            sitemap')]
@@ -177,8 +177,14 @@
           ;; which would avoid the possibility of this key being lost
           {::sitemap true})))))
 
-(defmacro defsitemap [& mapforms]
-  `(gen-sitemap (vector ~@(normalize-map-forms mapforms))))
+(defmacro gen-sitemap [mapforms]
+  `(-gen-sitemap ~(normalize-map-forms mapforms)))
+
+(defmacro defsitemap [name mapforms-vec & body]
+  `(do
+     (def ~name
+       (-> (gen-sitemap ~mapforms-vec)
+           ~@body))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; url generation from node-keys
@@ -246,65 +252,94 @@
                             (if-let [groups (matcher url)]
                               [nk groups]))
                           dynamic-matchers))]
+    ;; TODO implement 404 lookup mechanism that walks up the tree
+    ;; from the closest node match and looks for a 404 handler there
     (fn url-to-node [url]
       (or (match-static url)
           (match-dyn url)
-          [nil {}]))))
+          [:404
+           {} ; this second val is the context map for the :404 node
+           ]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; tie it all together
+(def default-404-response
+  {:status 404
+   :headers {"Content/Type" "text/html"}
+   :body "Not Found"})
+
+(def default-501-response
+  {:status 501
+   :headers {"Content/Type" "text/plain"}
+   :body "Not Implemented"})
+
+(def valid-http-methods-set
+  #{:get :head :post :put :delete :options})
 
 (defprotocol IUrlMapper
   (url-to-node [this url-path]) ; -> [node-key params-map]
   (node-to-url [this node-key params-map]))
 
-(defprotocol INodeContext
+(defprotocol ISiteNode
   (gen-url [this params])
   (get-breadcrumb [this params])
-  (get-handler [this req])
-  (get-view [this req resp]))
 
-(defrecord NodeContext [node-key context-map ring-app]
+  (-handle-ring-request [this req])
+  (-get-wrapped-handler-for-req [this req])
+  (-get-handler-for-req [this req]))
 
-  INodeContext
+(defprotocol IRingApp
+  (-get-sitenode [this node-key])
+  (-dispatch-request [this req]))
+
+(defrecord SiteNode [node-key sitemap node-context-map ring-app]
+
+  ISiteNode
   (gen-url [this params]
     (node-to-url ring-app node-key params))
   (get-breadcrumb [this params]
-    (if-let [crumb (context-map :breadcrumb)]
+    (if-let [crumb (node-context-map :breadcrumb)]
       (if (fn? crumb)
         (crumb params)
         crumb)
       (str node-key)))
 
-  (get-handler [this req]
+  (-handle-ring-request [this req]
+    (let [req (assoc req
+                :birdseye/node-key node-key
+                :birdseye/sitemap sitemap
+                :birdseye/node this)]
+      ((-get-wrapped-handler-for-req this req) req)))
+
+  (-get-wrapped-handler-for-req [this req]
+    ;; this provides a way to do framework middleware, default
+    ;; content-negotiation, etc.
     ;; TODO add support for contextual middleware on sub-sections of the
     ;; sitemap
-    (or
-     (context-map :h)
-     ;; or lookup inherited default handler from parent node context
-     (:birdseye/default-handler (.sitemap ring-app))
-     (fn [req]
-       {:status 200
-        :headers {"Content/Type" "text/html"}
-        :body (str "default handler for " (name node-key))})))
+    ;; TODO memoize this (memo key is the sitenode and the req params
+    ;; used to find the handler, e.g. :http-method)
+    (-get-handler-for-req this req))
 
-  (get-view [this req resp]
-    (or (context-map :v)
-        (constantly resp))))
+  (-get-handler-for-req [this req]
+    ;; innermost application handler provided by client code
+    (let [method (:http-method req)]
+      (or
+       (node-context-map method)
+       (and (valid-http-methods-set method)
+            (node-context-map :any))
+       ;; or lookup inherited default handler from parent node context
+       (and (valid-http-methods-set method)
+            (:birdseye/default-handler sitemap))
+       (:birdseye/handle-501 sitemap)
+       (constantly default-501-response)))))
 
 (defn set-default-handler [sitemap h]
   (assoc sitemap :birdseye/default-handler h))
 
-(defprotocol IRingApp
-  (get-node-ctx [this node-key])
-  (-augment-ring-request [this node-ctx req])
-  (handle-request [this req])
-  (handle-404 [this req]))
-
-(deftype RingApp [sitemap url-generator url-matcher]
+(deftype RingApp [sitemap sitenode-ctor url-matcher url-generator]
   ;; IFn support in order to provide: (ring-app req)
   IFn
-  (invoke [this req] (handle-request this req))
+  (invoke [this req] (-dispatch-request this req))
   (applyTo [this args] (clojure.lang.AFn/applyToHelper this args))
 
   IUrlMapper
@@ -313,39 +348,24 @@
   (url-to-node [this url-path] (url-matcher url-path))
 
   IRingApp
-  (get-node-ctx [this node-key]
+  (-dispatch-request [this req]
+    (let [url-path (or (:path-info req) (:uri req))
+          [node-key params] (url-to-node this url-path)
+          sitenode (-get-sitenode this node-key)
+          req (assoc req
+                :path-params params
+                :birdseye/url-path url-path)]
+      (-handle-ring-request sitenode req)))
+
+  (-get-sitenode [this node-key]
     ;; cache these
-    (map->NodeContext {:node-key node-key
-                       :context-map (sitemap node-key)
-                       :ring-app this}))
-
-  (-augment-ring-request [this node-ctx req]
-    (assoc req :birdseye/node-key (.node-key node-ctx)
-           :birdseye/sitemap sitemap
-           :birdseye/node-ctx node-ctx))
-
-  (handle-request
-    [this req]
-    (let [[node-key params] (url-to-node this (or (:path-info req)
-                                                  (:uri req)))]
-      (if node-key
-        (let [node-ctx          (get-node-ctx this node-key)
-              req               (-augment-ring-request this node-ctx req)
-              handler           (get-handler node-ctx req)
-              initial-resp      (handler req)
-              view              (get-view node-ctx req initial-resp)
-              final-resp        (view req initial-resp)]
-          final-resp)
-        (handle-404 this req))))
-
-  (handle-404 [this req]
-    ;; TODO implement 404 lookup mechanism that walks up the tree
-    ;; from the closest node match
-    ((or (sitemap :404)
-         (constantly
-          {:status 404
-           :headers {"Content/Type" "text/html"}
-           :body "Not Found"}))  req)))
+    (sitenode-ctor {:node-key node-key
+                    :sitemap sitemap
+                    :node-context-map (sitemap node-key)
+                    :ring-app this})))
 
 (defn gen-ring-app [sitemap]
-  (RingApp. sitemap url-generator (gen-url-matcher sitemap)))
+  (let [sitemap (if (:404 sitemap)
+                  sitemap
+                  (assoc sitemap :404 {:any (constantly default-404-response)}))]
+    (RingApp. sitemap map->SiteNode (gen-url-matcher sitemap) url-generator)))
