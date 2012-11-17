@@ -4,7 +4,7 @@
   (:require [clojure.core.match :as match])
 
   (:require [clout.core :as clout])
-  (:require [birdseye.core :refer
+  (:require [birdseye.sitemap :refer
              [split-node-key
               dyn-segment-id
               dynamic-node-key?

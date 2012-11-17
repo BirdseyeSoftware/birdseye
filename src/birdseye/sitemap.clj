@@ -1,4 +1,4 @@
-(ns birdseye.core
+(ns birdseye.sitemap
   (:require [clojure.string :as string]
             [clojure.core.match :refer [match]]))
 

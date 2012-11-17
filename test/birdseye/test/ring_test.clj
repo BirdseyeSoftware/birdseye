@@ -1,5 +1,5 @@
-(ns birdseye.test.ring
-  (:require [birdseye.core :refer :all]
+(ns birdseye.test.ring-test
+  (:require [birdseye.sitemap :refer :all]
             [birdseye.ring :refer :all]
             [clojure.test :refer :all]))
 

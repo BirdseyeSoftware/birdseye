@@ -1,5 +1,5 @@
-(ns birdseye.test.core
-  (:require [birdseye.core :refer :all]
+(ns birdseye.test.sitemap-test
+  (:require [birdseye.sitemap :refer :all]
             [clojure.test :refer :all]))
 
 (def nil-error-map {:error :nil
