@@ -1,23 +1,18 @@
 (ns birdseye.test.core
-  (:refer-clojure :exclude [sym])
-  (:require [birdseye.core :refer :all])
-  (:require [clojure.test :refer :all]))
+  (:require [birdseye.core :refer :all]
+            [clojure.test :refer :all]))
 
 (def nil-error-map {:error :nil
                     :message "nil is not a valid node-key"})
-
-(def match-sitemap-forms
-  ;; is private
-  (ns-resolve 'birdseye.core 'match-sitemap-forms))
 
 (defmacro assert-form-match
   ([in out] `(assert-form-match ~in ~out nil))
   ([in out msg]
      `(do
-        (is (= (match-sitemap-forms ~in) ~out) ~msg)
+        (is (= (-match-sitemap-forms ~in) ~out) ~msg)
         ;; test with trailing forms
-        (is (= (match-sitemap-forms (concat ~in [:trash :trash2])) ~out) ~msg)
-        (is (= (match-sitemap-forms (concat ~in [nil nil nil])) ~out) ~msg))))
+        (is (= (-match-sitemap-forms (concat ~in [:trash :trash2])) ~out) ~msg)
+        (is (= (-match-sitemap-forms (concat ~in [nil nil nil])) ~out) ~msg))))
 
 (deftest test-form-matching
   (assert-form-match [:foo] {:node-key :foo})
@@ -85,7 +80,9 @@
     (is (= 2 (get-in sm [:.users.$userid :2])))
     (is (= 2 (get-in sm2 [:toplevel.users.$userid :2])))
     (is (= 5 (-> sm keys count)))
-    (is (= 6 (-> sm2 keys count)))))
+    (is (= 6 (-> sm2 keys count)))
+    ;; (is false)
+    ))
 
 (deftest test-symbol-value-insertion
   (let [node-key :just-testing
@@ -115,90 +112,3 @@
 
   (is (thrown-with-msg? Exception #"Parent node .* does not exist"
         (gen-sitemap [foo.bar]))))
-
-(deftest test-node-to-url
-  (let [sm (gen-sitemap
-             [home
-             users
-             users.$userid
-             users.$userid.edit
-             users.$userid.comments
-             users.$userid.comments.$cid]
-             )
-        ring-app (gen-ring-app sm)
-        test-url (fn [url k m]
-                   (= url (node-to-url ring-app k m)))]
-    (is (test-url "/" :home {}))
-    (is (test-url "/users/" :users {}))
-    (is (test-url "/users/123/" :users.$userid
-                  {:userid 123}))
-    (is (test-url "/users/123/edit/"
-                  :users.$userid.edit
-                  {:userid 123}))
-    (is (test-url "/users/123/comments/99/"
-                  :users.$userid.comments.$cid
-                  {:userid 123
-                   :cid 99}))))
-
-(defmacro assert-url-to-node [ring-app url node-key & params]
-  `(is (= [~node-key ~(apply hash-map params)]
-          (url-to-node ~ring-app ~url))))
-
-(deftest test-url-to-node
-  (let [sm (gen-sitemap
-             [home
-             users
-             users.active
-             users.active.by_join_date
-             users.$userid
-             users.$userid.edit
-             users.$userid.comments
-             users.$userid.comments.$cid]
-             )
-        ring-app (gen-ring-app sm)]
-    (assert-url-to-node ring-app "/asdf" :404)
-    (assert-url-to-node ring-app "/" :home)
-    (assert-url-to-node ring-app "/users/" :users)
-    (assert-url-to-node ring-app "/users/active/" :users.active)
-    (assert-url-to-node ring-app "/users/active/by_join_date/"
-                        :users.active.by_join_date)
-    (assert-url-to-node
-     ring-app "/users/1234/" :users.$userid :userid "1234")
-    (assert-url-to-node
-     ring-app "/users/1234/edit/" :users.$userid.edit
-     :userid "1234")))
-
-(deftest test-ring-routing
-
-  (let [response-404 default-404-response
-        sm (gen-sitemap
-             [home
-              users
-              users.$userid {:any (fn [req]
-                                    {:status 200
-                                     :headers {"Content/Type" "text/txt"}
-                                     :body "Hi!"})
-                             :post (fn [req]
-                                     {:status 403
-                                      :headers {"Content/Type"
-                                                "text/txt"}
-                                      :body "Forbidden"
-                                      })}
-              users.$userid.edit
-              users.$userid.comments {:breadcrumb "comments"}
-              users.$userid.comments.$cid]             )
-        ring-app (gen-ring-app sm)
-        handler #(ring-app {:path-info % :http-method :get})
-        gen-resp #(merge {:status 200
-                          :headers {"Content/Type" "text/html"}}
-                         %)]
-    (is (= (handler "/nonexistent") response-404))
-    (is (= (handler "/users/1234//") response-404))
-    (is (= 403 (:status (ring-app {:path-info "/users/1234/"
-                                   :http-method :post}))))
-    (is (= 501 (:status (handler "/users/1234/edit/"))))
-    (is (= 501 (:status (handler "/users/1234/comments/"))))
-    (is (= (get-breadcrumb (-get-sitenode ring-app
-                                          :users.$userid.comments)
-                           {:userid 1234})
-           "comments"))))
