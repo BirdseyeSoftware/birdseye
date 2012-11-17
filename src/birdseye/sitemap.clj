@@ -80,7 +80,7 @@
       [_]
       {:error (first forms)})))
 
-(defn- normalize-map-forms [mapforms & prefix]
+(defn -normalize-map-forms [mapforms & prefix]
   (let [prefix (and prefix (name (first prefix)))
         normalize-key (fn [k-name]
                         (if (and prefix
@@ -101,14 +101,14 @@
                    (not (re-find #"/" (name form))))
               (keyword (normalize-key (name form)))
 
-              (vector? form) (apply vector (normalize-map-forms form))
+              (vector? form) (apply vector (-normalize-map-forms form))
 
               :else
               form)))))
 
 (defn- -normalize-node-children [children parent-key]
   (assert (node-children? children))
-  (normalize-map-forms
+  (-normalize-map-forms
    (if (sitemap? children)
      (flatten (seq children))
      children) parent-key))
@@ -146,7 +146,7 @@
           not a %s." (type context-map))))
 
 (defn -gen-sitemap [mapforms & [sitemap0]]
-  (let [mapforms (normalize-map-forms mapforms)
+  (let [mapforms (-normalize-map-forms mapforms)
         n (count mapforms)]
     (loop [i 0
            sitemap (if sitemap0 sitemap0 (sorted-map))]
@@ -174,12 +174,3 @@
           ;; and allow direct use with protocols.
           ;; However, the map wouldn't be a sorted-map then.
           {::sitemap true})))))
-
-(defmacro gen-sitemap [mapforms]
-  `(-gen-sitemap ~(normalize-map-forms mapforms)))
-
-(defmacro defsitemap [name mapforms-vec & body]
-  `(do
-     (def ~name
-       (-> (gen-sitemap ~mapforms-vec)
-           ~@body))))

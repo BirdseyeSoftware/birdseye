@@ -1,5 +1,6 @@
 (ns birdseye.test.ring-test
   (:require [birdseye.sitemap :refer :all]
+            [birdseye.macros :refer [defsitemap gen-sitemap]]
             [birdseye.ring :refer :all]
             [clojure.test :refer :all]))
 
