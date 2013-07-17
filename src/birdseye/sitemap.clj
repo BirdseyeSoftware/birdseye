@@ -92,7 +92,8 @@
           (for [form mapforms]
             (cond
               ;; match any symbols that should be inserted by value rather
-              ;; by than name
+              ;; by than name;TODO: convert this to a syntax quote
+              ;; like in crux.
               (and (named? form)
                    (re-find #"=" (name form)))
               (symbol (apply str (rest (name form))))

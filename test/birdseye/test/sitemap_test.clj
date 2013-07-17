@@ -67,11 +67,12 @@
   ;; test map of relative sub-nodes
   ;; and insertion of that map into a parent map
   (let [sm (gen-sitemap
-             [.foo
-              .foo.bar
-              .users
-              .users.$userid {:2 (+ 1 1)}
-              .users.$userid.edit])
+            [.foo
+             .foo.bar
+             .users
+             .users.$userid {:2 (+ 1 1)}
+             .users.$userid.edit])
+        ;; TODO: convert this = to a syntax quote like in crux.
         sm2 (gen-sitemap [toplevel =sm])]
     (is (relative-sitemap? sm))
     (is (not (relative-sitemap? sm2)))
@@ -89,6 +90,7 @@
   (let [node-key :just-testing
         node-key2 :just-testing.foo
         context-map {:a 1}
+        ;; TODO: convert this = to a syntax quote like in crux.
         sm (gen-sitemap [=node-key {} =node-key2 =context-map])]
     (assert-basic-sitemap-props sm)
     (is (= sm {:just-testing {}
