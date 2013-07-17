@@ -1,9 +1,9 @@
-(defproject birdseye "1.0.0-SNAPSHOT"
-  :description "A sitemap/url-routing system for Clojure web apps."
-  :dependencies [[org.clojure/clojure "1.4.0"]
-                 [org.clojure/core.match "0.2.0-alpha10"]
-                 [ring "1.1.5"]
+(defproject birdseye "1.0.0"
+  :description "A sitemap/url-routing system for Clojure/ring web apps."
+  :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/core.match "0.2.0-rc4"]
+                 [ring "1.2.0"]
                  [clout "1.1.0"]
                  ]
   :exclusions [clj-stacktrace]
-  :dev-dependencies [[ring-mock "0.1.3"]])
+  :dev-dependencies [[ring-mock "0.1.5"]])
