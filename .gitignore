@@ -7,3 +7,7 @@
 /checkouts
 /.lein-deps-sum
 /target/stale/dependencies
+/pom.xml.asc
+/target/birdseye-1.0.0.jar.asc
+/target/birdseye-1.0.1-deprecated.jar.asc
+/target/stale/extract-native.dependencies
