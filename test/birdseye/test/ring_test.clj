@@ -77,14 +77,14 @@
               users.$userid.comments {:breadcrumb "comments"}
               users.$userid.comments.$cid]             )
         ring-app (gen-ring-app sm)
-        handler #(ring-app {:path-info % :http-method :get})
+        handler #(ring-app {:path-info % :request-method :get})
         gen-resp #(merge {:status 200
                           :headers {"Content/Type" "text/html"}}
                          %)]
     (is (= (handler "/nonexistent") response-404))
     (is (= (handler "/users/1234//") response-404))
     (is (= 403 (:status (ring-app {:path-info "/users/1234/"
-                                   :http-method :post}))))
+                                   :request-method :post}))))
     (is (= 501 (:status (handler "/users/1234/edit/"))))
     (is (= 501 (:status (handler "/users/1234/comments/"))))
     (is (= (get-breadcrumb (-get-sitenode ring-app

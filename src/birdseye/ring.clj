@@ -147,7 +147,7 @@
     ;; TODO add support for contextual middleware on sub-sections of the
     ;; sitemap
     ;; TODO memoize this (memo key is the sitenode and the req params
-    ;; used to find the handler, e.g. :http-method)
+    ;; used to find the handler, e.g. :request-method)
     (-get-handler-for-req this req))
 
   (-get-ANY-method-handler [this req]
@@ -162,7 +162,7 @@
     ;; 404's are handled elsewhere. This code is only reached for
     ;; valid urls.
     ;; TODO or lookup inherited default handler from parent node context
-    (let [method (:http-method req)]
+    (let [method (:request-method req)]
       (or (node-context-map method)
           (when (valid-http-methods-set method)
             (-get-ANY-method-handler this req))
