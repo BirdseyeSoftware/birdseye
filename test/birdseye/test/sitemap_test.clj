@@ -1,45 +1,77 @@
 (ns birdseye.test.sitemap-test
-  (:require [birdseye.sitemap :refer :all]
-            [birdseye.macros :refer [defsitemap gen-sitemap]]
-            [clojure.test :refer :all]))
+  (:require [clojure.test :refer :all]
+            [clojure.set :as set]
+            [birdseye.sitemap :refer :all]
+            [birdseye.macros :refer :all]
+            ))
 
-(def nil-error-map {:error :nil
-                    :message "nil is not a valid node-key"})
+(defn- submap? [m superm]
+  (set/subset? (set (seq m)) (set (seq superm))))
+
+(def nil-error-map {:error :nil :sexp-count 1})
+
+(def sample-child-sitemap (gen-sitemap [.a .b .c]))
 
 (defmacro assert-form-match
-  ([in out] `(assert-form-match ~in ~out nil))
-  ([in out msg]
+  ([in expected] `(assert-form-match ~in ~expected nil))
+  ([in expected msg]
      `(do
-        (is (= (-match-sitemap-forms ~in) ~out) ~msg)
-        ;; test with trailing forms
-        (is (= (-match-sitemap-forms (concat ~in [:trash :trash2])) ~out) ~msg)
-        (is (= (-match-sitemap-forms (concat ~in [nil nil nil])) ~out) ~msg))))
+        (is (submap? ~expected (-match-sitemap-forms ~in)) ~msg)
+        (when (submap? ~expected (-match-sitemap-forms ~in))
+          ;; test with trailing forms, which won't be matched
+          (is (submap? ~expected
+                       (-match-sitemap-forms (concat ~in [:trash :trash2]))) ~msg)
+          (is (submap? ~expected
+                       (-match-sitemap-forms (concat ~in [nil nil nil]))) ~msg)))))
 
 (deftest test-form-matching
-  (assert-form-match [:foo] {:node-key :foo})
-  (assert-form-match (list :foo) {:node-key :foo})
+  (assert-form-match [:foo] {:node-key :foo :sexp-count 1})
+  (assert-form-match (list :foo) {:node-key :foo :sexp-count 1})
+
+  ;; with child nodes as vectors of forms
   (assert-form-match [:foo [:.bar] :bar]
                      {:node-key :foo
                       :context-map {}
                       :sexp-count 2
                       :children {:.bar {}}})
   (assert-form-match [:foo {:a 1234}]
-                     {:node-key :foo :context-map {:a 1234}})
+                     {:node-key :foo
+                      :context-map {:a 1234}
+                      :sexp-count 2})
   (assert-form-match [:foo {:a 1234} [:.bar]]
                      {:node-key :foo
                       :sexp-count 3
                       :context-map {:a 1234}
                       :children {:.bar {}}})
 
+  ;; with child nodes as sitemaps
+  (assert-form-match
+   [:top sample-child-sitemap]
+   {:node-key :top
+    :sexp-count 2
+    :children sample-child-sitemap})
+  (assert-form-match
+   [:top {:k1 1} sample-child-sitemap]
+   {:node-key :top
+    :sexp-count 3
+    :context-map {:k1 1}
+    :children sample-child-sitemap})
+
+  ;; error conditions
   (assert-form-match [nil] nil-error-map)
-  (assert-form-match ['error] {:error 'error})
-  (assert-form-match [true] {:error true})
+  (assert-form-match [(symbol "foo")]
+                     {:error {:invalid-entry (symbol "foo")}
+                      :sexp-count 1})
+
+  (assert-form-match ['error] {:error
+                               {:invalid-entry 'error}
+                               :sexp-count 1})
+  (assert-form-match [true] {:error {:invalid-entry true}
+                             :sexp-count 1})
   (assert-form-match [:nil] nil-error-map))
 
 (defn- assert-basic-sitemap-props [sm]
-  (is (sitemap? sm))
-  (is (every? map? (vals sm)))
-  (is (every? keyword? (keys sm))))
+  (is (valid-sitemap? sm)))
 
 (deftest test-gen-sitemap
   (let [sm (gen-sitemap
