@@ -2,8 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.set :as set]
             [birdseye.sitemap :refer :all]
-            [birdseye.macros :refer :all]
-            ))
+            [birdseye.macros :refer :all]))
 
 (defn- submap? [m superm]
   (set/subset? (set (seq m)) (set (seq superm))))
@@ -182,3 +181,28 @@
 
   (is (thrown-with-msg? Exception #"Parent node .* does not exist"
         (gen-sitemap [foo.bar]))))
+
+(deftest test-node-key-to-hierarchy
+  (are [input expected] (= (node-key-to-hierarchy input) expected)
+       :a (list :a)
+       :a.b (list :a.b :a)
+       :a.b.c (list :a.b.c :a.b :a)
+       :aaa.bbb.ccc (list :aaa.bbb.ccc :aaa.bbb :aaa)))
+
+(deftest test-lookup-context-in-hierarchy
+  (let [sm {:a {:k 1 :k9 9}
+            :a.b {:k 2}
+            :a.b.c {:kc 'c}}]
+    (are [nk vk expected] (= (lookup-context-in-hierarchy sm nk vk) expected)
+         :a.b.c :k 2
+         :a.b.c :kc 'c
+         :a.b.c :k9 9
+         :a.b.c :foo nil
+
+         :a.b :k 2
+         :a.b :k9 9
+         :a.b :kc nil
+
+         :a :k 1
+         :a :k9 9
+         :a :kc nil)))

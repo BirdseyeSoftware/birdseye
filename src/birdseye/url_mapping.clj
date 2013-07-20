@@ -81,13 +81,10 @@
                             (if-let [groups (matcher url)]
                               [nk groups]))
                           dynamic-matchers))]
-    ;; TODO implement 404 lookup mechanism that walks up the tree
-    ;; from the closest node match and looks for a 404 handler there
     (fn url-to-node [url]
       (or (match-static url)
           (match-dyn url)
-          [:http-404
-           {} ; this second val is the context map for the :404 node
+          [:birdseye/http-404 {} ; this is the req path params-map
            ]))))
 
 (deftype UrlMapper [url-matcher url-generator]

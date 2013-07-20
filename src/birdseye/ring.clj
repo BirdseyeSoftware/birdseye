@@ -1,5 +1,6 @@
 (ns birdseye.ring
   (:require [clojure.string :as string]
+            [birdseye.sitemap :refer [lookup-context-in-hierarchy]]
             [birdseye.url-mapping :refer
              [gen-default-url-mapper
               IUrlMapper
@@ -10,11 +11,11 @@
 (defprotocol ISiteNode
   (gen-url [this params])
   (get-breadcrumb [this params])
+  (lookup-context [this key])
 
   (-handle-ring-request [this req])
   (-get-wrapped-handler-for-req [this req])
   (-get-ANY-method-handler [this req])
-  (-get-501-handler [this req])
   (-get-handler-for-req [this req]))
 
 (defprotocol IRingApp
@@ -48,11 +49,15 @@
         crumb)
       (str node-key)))
 
+  (lookup-context [this key]
+    (lookup-context-in-hierarchy sitemap node-key key))
+
   (-handle-ring-request [this req]
     (let [req (assoc req
+                :birdseye/node this
                 :birdseye/node-key node-key
-                :birdseye/sitemap sitemap
-                :birdseye/node this)]
+                :birdseye/node-context node-context-map
+                :birdseye/sitemap sitemap)]
       ((-get-wrapped-handler-for-req this req) req)))
 
   (-get-wrapped-handler-for-req [this req]
@@ -66,21 +71,16 @@
 
   (-get-ANY-method-handler [this req]
     (or (node-context-map :any)
-        (:birdseye/default-handler sitemap)))
-
-  (-get-501-handler [this req]
-    (or (:birdseye/handle-501 sitemap)
-        (constantly default-501-response)))
+        (lookup-context this :birdseye/default-handler)))
 
   (-get-handler-for-req [this req]
-    ;; 404's are handled elsewhere. This code is only reached for
-    ;; valid urls.
-    ;; TODO or lookup inherited default handler from parent node context
+    ;; This code is only reached for valid urls.
+    ;; 404's are handled by routing to node-key :birdseye/http-404.
     (let [method (:request-method req)]
       (or (node-context-map method)
           (when (valid-http-methods-set method)
             (-get-ANY-method-handler this req))
-          (-get-501-handler this req)))))
+          (lookup-context this :birdseye/http-501)))))
 
 (defrecord RingApp [sitemap sitenode-ctor url-mapper]
   ;; IFn support in order to provide: (ring-app req)
@@ -113,14 +113,23 @@
 (defn set-default-handler [sitemap h]
   (assoc sitemap :birdseye/default-handler h))
 
-(defn add-error-handlers [sitemap]
-  (if (:http-404 sitemap)
-    sitemap
-    (assoc sitemap :http-404 {:any (constantly
-                               default-404-response)})))
+(defn default-500-handler [req]
+  {:status 500
+   :content-type "text/html"
+   :body "An unexpected server error occurred."})
+
+(def root-context {:birdseye/http-501 (constantly default-501-response)
+                   :birdseye/http-500 default-500-handler})
+
+(defn normalize-sitemap [sitemap]
+  (let [mk-any-handler (fn [resp] {:any (constantly resp)})]
+    (-> sitemap
+        (assoc :birdseye/root-context root-context)
+        (update-in [:birdseye/http-404]
+                   #(or % (mk-any-handler default-404-response))))))
 
 (defn gen-ring-app [sitemap]
   (map->RingApp
-   {:sitemap (add-error-handlers sitemap)
+   {:sitemap (normalize-sitemap sitemap)
     :sitenode-ctor map->SiteNode
     :url-mapper (gen-default-url-mapper sitemap)}))

@@ -43,7 +43,7 @@
              users.$userid.comments.$cid]
              )
         url-mapper (gen-default-url-mapper sm)]
-    (assert-url-to-node url-mapper "/asdf" :http-404)
+    (assert-url-to-node url-mapper "/asdf" :birdseye/http-404)
     (assert-url-to-node url-mapper "/" :home)
     (assert-url-to-node url-mapper "/users/" :users)
     (assert-url-to-node url-mapper "/users/active/" :users.active)

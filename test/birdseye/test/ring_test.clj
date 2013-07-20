@@ -25,10 +25,13 @@
               users.$userid.comments {:breadcrumb "comments"}
               users.$userid.comments.$cid]             )
         ring-app (gen-ring-app sm)
+        sm (:sitemap ring-app) ; now has extra error handling keys
         handler #(ring-app {:path-info % :request-method :get})
         gen-resp #(merge {:status 200
                           :headers {"Content/Type" "text/html"}}
                          %)]
+    (is (:birdseye/root-context sm))
+    (is (lookup-context-in-hierarchy sm :users :birdseye/http-501))
     (is (= (handler "/nonexistent") response-404))
     (is (= (handler "/users/1234//") response-404))
     (is (= 403 (:status (ring-app {:path-info "/users/1234/"
