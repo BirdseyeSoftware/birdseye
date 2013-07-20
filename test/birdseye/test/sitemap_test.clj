@@ -184,10 +184,10 @@
 
 (deftest test-node-key-to-hierarchy
   (are [input expected] (= (node-key-to-hierarchy input) expected)
-       :a (list :a)
-       :a.b (list :a.b :a)
-       :a.b.c (list :a.b.c :a.b :a)
-       :aaa.bbb.ccc (list :aaa.bbb.ccc :aaa.bbb :aaa)))
+       :a [:a]
+       :a.b [:a.b :a]
+       :a.b.c [:a.b.c :a.b :a]
+       :aaa.bbb.ccc [:aaa.bbb.ccc :aaa.bbb :aaa]))
 
 (deftest test-lookup-context-in-hierarchy
   (let [sm {:a {:k 1 :k9 9}

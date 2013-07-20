@@ -34,16 +34,17 @@
     (keyword (second (decompose-dyn-segment key-segment)))))
 
 (defn node-key-to-hierarchy [node-key]
-  (map join-node-key-segments
-       (reverse
-        (rest (reductions (fn [parent-segments k]
-                            (conj parent-segments k))
-                          []
-                          (split-node-key node-key))))))
+  (into []
+   (map join-node-key-segments
+        (reverse
+         (rest (reductions (fn [parent-segments k]
+                             (conj parent-segments k))
+                           []
+                           (split-node-key node-key)))))))
 
 (defn lookup-context-in-hierarchy [sitemap start-node-key context-key]
-  (let [context-hierarchy (cons :birdseye/root-context
-                                (node-key-to-hierarchy start-node-key))
+  (let [context-hierarchy (conj (node-key-to-hierarchy start-node-key)
+                                :birdseye/root-context)
         lookup (fn lookup [h-node-key]
                  (get-in sitemap [h-node-key context-key]))]
     (some lookup context-hierarchy)))

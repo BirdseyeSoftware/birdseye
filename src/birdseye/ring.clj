@@ -57,8 +57,13 @@
                 :birdseye/node this
                 :birdseye/node-key node-key
                 :birdseye/node-context node-context-map
-                :birdseye/sitemap sitemap)]
-      ((-get-wrapped-handler-for-req this req) req)))
+                :birdseye/sitemap sitemap)
+          handler (-get-wrapped-handler-for-req this req)]
+      (try (handler req)
+           (catch Exception e
+             (if-let [exc-handler (lookup-context this :birdseye/http-500)]
+               (exc-handler (assoc req :birdseye/exception e))
+               (throw e))))))
 
   (-get-wrapped-handler-for-req [this req]
     ;; this provides a way to do framework middleware, default
