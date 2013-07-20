@@ -1,10 +1,6 @@
 # birdseye
 
-FIXME: write description
-
-## Usage
-
-FIXME: write
+A sitemap/url-routing system for Clojure/ring web apps.
 
 ## License
 
