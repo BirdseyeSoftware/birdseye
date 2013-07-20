@@ -13,11 +13,11 @@
               users
               users.$userid {:any (fn [req]
                                     {:status 200
-                                     :headers {"Content/Type" "text/txt"}
+                                     :headers {"content-type" "text/txt"}
                                      :body "Hi!"})
                              :post (fn [req]
                                      {:status 403
-                                      :headers {"Content/Type"
+                                      :headers {"content-type"
                                                 "text/txt"}
                                       :body "Forbidden"
                                       })}
@@ -28,7 +28,7 @@
         sm (:sitemap ring-app) ; now has extra error handling keys
         handler #(ring-app {:path-info % :request-method :get})
         gen-resp #(merge {:status 200
-                          :headers {"Content/Type" "text/html"}}
+                          :headers {"content-type" "text/html"}}
                          %)]
     (is (:birdseye/root-context sm))
     (is (lookup-context-in-hierarchy sm :users :birdseye/http-501))
@@ -42,3 +42,14 @@
                                           :users.$userid.comments)
                            {:userid 1234})
            "comments"))))
+
+(deftest test-set-default-handler
+  (let [defh (fn [req]
+               {:status 200
+                :body "Yo"
+                :headers {"content-type" "text/txt"}})
+        sm (gen-sitemap [home a a.b])
+        sm (set-default-handler sm defh)
+        ring-app (gen-ring-app sm)
+        handler #(ring-app {:path-info % :request-method :get})]
+    (is (= "Yo" (:body (handler "/a/b/"))))))

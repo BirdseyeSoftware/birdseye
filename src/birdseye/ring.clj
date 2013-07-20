@@ -26,12 +26,12 @@
 
 (def default-404-response
   {:status 404
-   :headers {"Content/Type" "text/html"}
+   :headers {"content-type" "text/html"}
    :body "Not Found"})
 
 (def default-501-response
   {:status 501
-   :headers {"Content/Type" "text/plain"}
+   :headers {"content-type" "text/html"}
    :body "Not Implemented"})
 
 (def valid-http-methods-set
@@ -111,11 +111,14 @@
                     :ring-app this})))
 
 (defn set-default-handler [sitemap h]
-  (assoc sitemap :birdseye/default-handler h))
+  (update-in
+   sitemap
+   [:birdseye/root-context :birdseye/default-handler]
+   (constantly h)))
 
 (defn default-500-handler [req]
   {:status 500
-   :content-type "text/html"
+   :headers {"content-type" "text/html"}
    :body "An unexpected server error occurred."})
 
 (def root-context {:birdseye/http-501 (constantly default-501-response)
@@ -124,7 +127,7 @@
 (defn normalize-sitemap [sitemap]
   (let [mk-any-handler (fn [resp] {:any (constantly resp)})]
     (-> sitemap
-        (assoc :birdseye/root-context root-context)
+        (update-in [:birdseye/root-context] #(merge root-context %))
         (update-in [:birdseye/http-404]
                    #(or % (mk-any-handler default-404-response))))))
 
