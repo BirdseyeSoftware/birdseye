@@ -34,13 +34,10 @@
     (keyword (second (decompose-dyn-segment key-segment)))))
 
 (defn node-key-to-hierarchy [node-key]
-  (into []
-   (map join-node-key-segments
-        (reverse
-         (rest (reductions (fn [parent-segments k]
-                             (conj parent-segments k))
-                           []
-                           (split-node-key node-key)))))))
+  (let [segs (split-node-key node-key)
+        offsets (reverse (range 1 (+ 1 (count segs))))]
+    (into [] (for [i offsetsidxs]
+               (join-node-key-segments (subvec segs 0 i))))))
 
 (defn lookup-context-in-hierarchy [sitemap start-node-key context-key]
   (let [context-hierarchy (conj (node-key-to-hierarchy start-node-key)
