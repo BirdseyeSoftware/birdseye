@@ -36,7 +36,7 @@
 (defn node-key-to-hierarchy [node-key]
   (let [segs (split-node-key node-key)
         offsets (reverse (range 1 (+ 1 (count segs))))]
-    (into [] (for [i offsetsidxs]
+    (into [] (for [i offsets]
                (join-node-key-segments (subvec segs 0 i))))))
 
 (defn lookup-context-in-hierarchy [sitemap start-node-key context-key]

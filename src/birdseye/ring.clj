@@ -24,16 +24,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def default-404-response
-  {:status 404
-   :headers {"content-type" "text/html"}
-   :body "Not Found"})
-
-(def default-501-response
-  {:status 501
-   :headers {"content-type" "text/html"}
-   :body "Not Implemented"})
-
 (def valid-http-methods-set
   #{:get :head :post :put :delete :options})
 
@@ -115,15 +105,39 @@
                     :node-context-map (sitemap node-key)
                     :ring-app this})))
 
-(defn set-default-handler [sitemap h]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; defaults in :birdseye/root-context and :birdseye/http-404
+
+(defn -set-default* [sitemap key val]
   (update-in
-   sitemap
-   [:birdseye/root-context :birdseye/default-handler]
-   (constantly h)))
+   sitemap [:birdseye/root-context key]
+   (constantly val)))
+
+(defn set-default-handler [sitemap h]
+  (-set-default* sitemap :birdseye/default-handler h))
+
+(defn set-default-error-handler [sitemap h]
+  (-set-default* sitemap :birdseye/http-500 h))
+
+(defn set-default-501-handler [sitemap h]
+  (-set-default* sitemap :birdseye/http-501 h))
+
+(defn set-404-handler [sitemap h]
+  (assoc sitemap :birdseye/http-404 h))
+
+(def default-404-response
+  {:status 404
+   :headers {"content-type" "text/html"}
+   :body "Not Found"})
+
+(def default-501-response
+  {:status 501
+   :headers {"content-type" "text/html"}
+   :body "Not Implemented"})
 
 (defn default-500-handler [req]
   {:status 500
-   :headers {"content-type" "text/html"}
+   :headers {"content-type" "text/plain"}
    :body "An unexpected server error occurred."})
 
 (def root-context {:birdseye/http-501 (constantly default-501-response)
@@ -135,6 +149,9 @@
         (update-in [:birdseye/root-context] #(merge root-context %))
         (update-in [:birdseye/http-404]
                    #(or % (mk-any-handler default-404-response))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; defaults in :birdseye/root-context and :birdseye/http-404
 
 (defn gen-ring-app [sitemap]
   (map->RingApp
