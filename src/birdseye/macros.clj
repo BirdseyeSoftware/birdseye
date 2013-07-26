@@ -7,7 +7,7 @@
                              join-node-key-segments
                              node-key-segment-separator]]))
 
-(defn unquoted?
+(defn- unquoted?
   "Check if the form is syntax-unquoted: like ~form"
   [form]
   (and (seq? form)
@@ -15,15 +15,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; sitemap definition related code
 
-(defn- node-children? [o]
-  (or (vector? o) (sitemap? o)))
-
 (declare -gen-sitemap)
 (defn -handle-children [node-key context-map children]
   (let [sexp-count (if (nil? context-map) 2 3)
-        children (if (not (sitemap? children))
-                   (-gen-sitemap children)
-                   children)
         context-map (or context-map {})
         match (if (contains? children :.index)
                 {:node-key node-key
@@ -54,10 +48,10 @@
 
                      [([(k :guard keyword?)
                         (context-map :guard map?)
-                        (children :guard node-children?) & r] :seq)]
+                        (children :guard sitemap?) & r] :seq)]
                      (-handle-children k context-map children)
 
-                     [([(k :guard keyword?) (children :guard node-children?) & r] :seq)]
+                     [([(k :guard keyword?) (children :guard sitemap?) & r] :seq)]
                      (-handle-children k nil children)
 
                      [([(k :guard keyword?) (context-map :guard map?) & r] :seq)]
@@ -105,12 +99,8 @@
               form)))))
 
 (defn- -normalize-node-children [children parent-key]
-  (assert (node-children? children))
-  (-normalize-map-forms
-   (if (sitemap? children)
-     (flatten (seq children))
-     children)
-   parent-key))
+  (assert (sitemap? children))
+  (-normalize-map-forms (flatten (seq children)) parent-key))
 
 (defn- -throwf [msg & args]
   (throw (Exception. (apply format msg args))))
@@ -133,7 +123,7 @@
 (defn- -validate-sitemap-addition [sitemap index-in-forms node-key context-map]
   (if (not (keyword? node-key))
     (-throwf (str "Was expecting a sitemap node-key"
-                  " in defsitemap position %s") index-in-forms))
+                  " in sitemap position %s") index-in-forms))
   (if (= node-key-segment-separator (last (name node-key)))
     (-throwf "Node keys must not end in a dot: %s" node-key))
   (if (sitemap node-key)
@@ -172,11 +162,5 @@
           ;; However, the map wouldn't be a sorted-map then.
           {:birdseye/sitemap true})))))
 
-(defmacro gen-sitemap [mapforms]
+(defmacro sitemap [& mapforms]
   `(-gen-sitemap ~(-normalize-map-forms mapforms)))
-
-(defmacro defsitemap [name mapforms-vec & body]
-  `(do
-     (def ~name
-       (-> (gen-sitemap ~mapforms-vec)
-           ~@body))))

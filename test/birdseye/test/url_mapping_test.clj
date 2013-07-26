@@ -1,17 +1,16 @@
 (ns birdseye.test.url-mapping-test
   (:require [clojure.test :refer :all]
-            [birdseye.macros :refer [gen-sitemap]]
+            [birdseye.macros :refer [sitemap]]
             [birdseye.url-mapping :refer :all]))
 
 (deftest test-node-to-url
-  (let [sm (gen-sitemap
-             [home
-             users
-             users.$userid
-             users.$userid.edit
-             users.$userid.comments
-             users.$userid.comments.$cid]
-             )
+  (let [sm (sitemap
+            home
+            users
+            users.$userid
+            users.$userid.edit
+            users.$userid.comments
+            users.$userid.comments.$cid)
         url-mapper (gen-default-url-mapper sm)
         test-url (fn [url k m]
                    (= url (node-to-url url-mapper k m)))]
@@ -32,16 +31,15 @@
           (url-to-node ~url-mapper ~url))))
 
 (deftest test-url-to-node
-  (let [sm (gen-sitemap
-             [home
-             users
-             users.active
-             users.active.by_join_date
-             users.$userid
-             users.$userid.edit
-             users.$userid.comments
-             users.$userid.comments.$cid]
-             )
+  (let [sm (sitemap
+            home
+            users
+            users.active
+            users.active.by_join_date
+            users.$userid
+            users.$userid.edit
+            users.$userid.comments
+            users.$userid.comments.$cid)
         url-mapper (gen-default-url-mapper sm)]
     (assert-url-to-node url-mapper "/asdf" :birdseye/http-404)
     (assert-url-to-node url-mapper "/" :home)

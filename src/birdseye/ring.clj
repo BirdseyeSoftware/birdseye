@@ -25,7 +25,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def valid-http-methods-set
-  #{:get :head :post :put :delete :options})
+  #{:get :head :post :put :delete :patch :options})
 
 (defrecord SiteNode [node-key sitemap node-context-map ring-app]
 

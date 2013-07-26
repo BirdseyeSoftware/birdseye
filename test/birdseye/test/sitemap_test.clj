@@ -9,7 +9,7 @@
 
 (def nil-error-map {:error :nil :sexp-count 1})
 
-(def sample-child-sitemap (gen-sitemap [.a .b .c]))
+(def sample-child-sitemap (sitemap .a .b .c))
 
 (defmacro assert-form-match
   ([in expected] `(assert-form-match ~in ~expected nil))
@@ -26,22 +26,6 @@
 (deftest test-form-matching
   (assert-form-match [:foo] {:node-key :foo :sexp-count 1})
   (assert-form-match (list :foo) {:node-key :foo :sexp-count 1})
-
-  ;; with child nodes as vectors of forms
-  (assert-form-match [:foo [:.bar] :bar]
-                     {:node-key :foo
-                      :context-map {}
-                      :sexp-count 2
-                      :children {:.bar {}}})
-  (assert-form-match [:foo {:a 1234}]
-                     {:node-key :foo
-                      :context-map {:a 1234}
-                      :sexp-count 2})
-  (assert-form-match [:foo {:a 1234} [:.bar]]
-                     {:node-key :foo
-                      :sexp-count 3
-                      :context-map {:a 1234}
-                      :children {:.bar {}}})
 
   ;; with child nodes as sitemaps
   (assert-form-match
@@ -73,22 +57,22 @@
   (is (valid-sitemap? sm)))
 
 (deftest test-gen-sitemap
-  (let [sm (gen-sitemap
-             [home
-             users
-             users.$userid
-             users.$userid.edit])]
+  (let [sm (sitemap
+            home
+            users
+            users.$userid
+            users.$userid.edit)]
     (assert-basic-sitemap-props sm)
     (is (= 4 (-> sm keys count))))
 
-  (let [sm (gen-sitemap
-              [home
-               foo
-               foo.bar
-               foo.bar.asdf
-               users
-               users.$userid {:2 (+ 1 1)}
-               users.$userid.edit {}])]
+  (let [sm (sitemap
+            home
+            foo
+            foo.bar
+            foo.bar.asdf
+            users
+            users.$userid {:2 (+ 1 1)}
+            users.$userid.edit {})]
     (assert-basic-sitemap-props sm)
     (is (every? empty? (vals (dissoc sm :users.$userid))))
     (is (= 2 (get-in sm [:users.$userid :2])))))
@@ -96,13 +80,13 @@
 (deftest test-relative-sub-maps
   ;; test map of relative sub-nodes
   ;; and insertion of that map into a parent map
-  (let [sm (gen-sitemap
-            [.foo
-             .foo.bar
-             .users
-             .users.$userid {:2 (+ 1 1)}
-             .users.$userid.edit])
-        sm2 (gen-sitemap [toplevel ~sm])]
+  (let [sm (sitemap
+            .foo
+            .foo.bar
+            .users
+            .users.$userid {:2 (+ 1 1)}
+            .users.$userid.edit)
+        sm2 (sitemap toplevel ~sm)]
     (is (relative-sitemap? sm))
     (is (not (relative-sitemap? sm2)))
     (is (absolute-sitemap? sm2))
@@ -111,25 +95,22 @@
     (is (= 2 (get-in sm [:.users.$userid :2])))
     (is (= 2 (get-in sm2 [:toplevel.users.$userid :2])))
     (is (= 5  (-> sm keys count)))
-    (is (= 6 (-> sm2 keys count)))
-    ;; (is false)
-    ))
+    (is (= 6 (-> sm2 keys count)))))
 
 (deftest test-index-handling-on-submap-insertion
-  (let [sub-nodes '[.index {:foo 2} .sub .sub.sub2]
-        submap (-gen-sitemap sub-nodes)
-        parent-map (gen-sitemap
-                    [home
+  (let [submap (sitemap .index {:foo 2} .sub .sub.sub2)
+        parent-map (sitemap
+                    home
+                    insertion-point {:foo 1 :bar 9} ~submap
+                    insertion-point2 ~submap)
+        parent-map2 (sitemap
+                     home
                      insertion-point {:foo 1 :bar 9} ~submap
-                     insertion-point2 ~submap])
-        parent-map2 (gen-sitemap
-                     [home
-                      insertion-point {:foo 1 :bar 9} ~sub-nodes
-                      insertion-point2 ~sub-nodes])
-        parent-map3 (gen-sitemap
-                     [home
-                      insertion-point ~sub-nodes
-                      insertion-point2 ~sub-nodes])
+                     insertion-point2 ~submap)
+        parent-map3 (sitemap
+                     home
+                     insertion-point ~submap
+                     insertion-point2 ~submap)
         expected-keys #{:home
                         :insertion-point
                         :insertion-point.sub
@@ -152,11 +133,10 @@
   (let [node-key :just-testing
         node-key2 :just-testing.foo
         context-map {:a 1}
-        sm (gen-sitemap
-            [~node-key {}
-             ~node-key2 ~context-map
-             literal-node
-             ])]
+        sm (sitemap
+            ~node-key {}
+            ~node-key2 ~context-map
+            literal-node)]
     (assert-basic-sitemap-props sm)
     (is (= sm {:just-testing {}
                :just-testing.foo context-map
@@ -164,23 +144,23 @@
 
 (deftest test-invalid-map-exceptions
   (is (thrown-with-msg? Exception #"must not end in a dot"
-        (gen-sitemap [foo.bar.])))
+        (sitemap foo.bar.)))
 
   (is (thrown-with-msg? Exception #"Invalid.*position 0"
-        (gen-sitemap [{} {}])))
+        (sitemap {} {})))
 
   (is (thrown-with-msg? Exception #"Invalid .* position 3"
-        (gen-sitemap [foo bar {} {}]) ))
+        (sitemap foo bar {} {}) ))
 
   (is (thrown-with-msg? Exception #"Invalid .* position 0"
-        (gen-sitemap [nil bar])))
+        (sitemap nil bar)))
   (is (thrown-with-msg? Exception #"Invalid .* position 1"
-        (gen-sitemap [bar nil])))
+        (sitemap bar nil)))
   (is (thrown-with-msg? Exception #"Invalid .* position 1"
-        (gen-sitemap [bar false])))
+        (sitemap bar false)))
 
   (is (thrown-with-msg? Exception #"Parent node .* does not exist"
-        (gen-sitemap [foo.bar]))))
+        (sitemap foo.bar))))
 
 (deftest test-node-key-to-hierarchy
   (are [input expected] (= (node-key-to-hierarchy input) expected)

@@ -2,28 +2,28 @@
   (:require [clojure.test :refer :all]
 
             [birdseye.sitemap :refer :all]
-            [birdseye.macros :refer [defsitemap gen-sitemap]]
+            [birdseye.macros :refer [sitemap]]
             [birdseye.url-mapping :refer :all]
             [birdseye.ring :refer :all]))
 
 (deftest test-ring-routing
   (let [response-404 default-404-response
-        sm (gen-sitemap
-             [home
-              users
-              users.$userid {:any (fn [req]
-                                    {:status 200
-                                     :headers {"content-type" "text/txt"}
-                                     :body "Hi!"})
-                             :post (fn [req]
-                                     {:status 403
-                                      :headers {"content-type"
-                                                "text/txt"}
-                                      :body "Forbidden"
-                                      })}
-              users.$userid.edit
-              users.$userid.comments {:breadcrumb "comments"}
-              users.$userid.comments.$cid]             )
+        sm (sitemap
+            home
+            users
+            users.$userid {:any (fn [req]
+                                  {:status 200
+                                   :headers {"content-type" "text/txt"}
+                                   :body "Hi!"})
+                           :post (fn [req]
+                                   {:status 403
+                                    :headers {"content-type"
+                                              "text/txt"}
+                                    :body "Forbidden"
+                                    })}
+            users.$userid.edit
+            users.$userid.comments {:breadcrumb "comments"}
+            users.$userid.comments.$cid             )
         ring-app (gen-ring-app sm)
         sm (:sitemap ring-app) ; now has extra error handling keys
         handler #(ring-app {:path-info % :request-method :get})
@@ -48,7 +48,7 @@
                {:status 200
                 :body "Yo"
                 :headers {"content-type" "text/txt"}})
-        sm (gen-sitemap [home a a.b])
+        sm (sitemap home a a.b)
         sm (set-default-handler sm defh)
         ring-app (gen-ring-app sm)
         handler #(ring-app {:path-info % :request-method :get})]
